@@ -12,10 +12,9 @@ export default async function EditorPage({ params }: { params: Promise<{ eventId
   const event = await db.event.findUnique({ where: { id: eventId } })
   if (!event) notFound()
 
-  const [design, canEdit, canAi] = await Promise.all([
+  const [design, canEdit] = await Promise.all([
     db.eventDesign.upsert({ where: { eventId }, update: {}, create: { eventId } }),
     hasFeature(user.id, eventId, FEATURES.CANVA_EDITOR),
-    hasFeature(user.id, eventId, FEATURES.AI_GENERATOR),
   ])
 
   if (!canEdit) {
@@ -26,9 +25,7 @@ export default async function EditorPage({ params }: { params: Promise<{ eventId
     <div className="-m-4 sm:-m-6 lg:m-0">
       <InvitationEditor
         eventId={eventId}
-        eventType={event.type}
         design={JSON.parse(JSON.stringify(design))}
-        canAi={canAi}
       />
     </div>
   )

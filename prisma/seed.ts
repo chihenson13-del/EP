@@ -5,7 +5,7 @@ const db = new PrismaClient()
 
 const PLAN_FEATURE_SUMMARY: Record<string, string[]> = {
   FREE: ["Basic event creation", "Basic invitation", "Basic RSVP", "Basic guest management", "Basic seating", "Up to 30 guests"],
-  PREMIUM: ["Premium themes", "Canva-style editor", "AI invitation generator", "Custom RSVP questions", "Advanced seating", "Gallery, maps & QR", "Exports", "Remove branding"],
+  PREMIUM: ["Premium themes", "Canva-style editor", "Custom RSVP questions", "Advanced seating", "Gallery, maps & QR", "Exports", "Remove branding"],
   PRO: ["Everything in Premium", "Unlimited guests", "Advanced floor plan", "Coordinator tools", "Client collaboration", "Co-branding", "Advanced analytics & exports"],
   UNLIMITED: ["Everything in Pro", "Applies account-wide", "Unlimited events", "New events auto-unlock"],
 }

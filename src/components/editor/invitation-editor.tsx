@@ -5,7 +5,7 @@ import { toast } from "sonner"
 import {
   Type, Square, Circle, ImageIcon, Undo2, Redo2, ZoomIn, ZoomOut, Maximize,
   Trash2, Copy, Lock, LockOpen, Eye, EyeOff, ChevronUp, ChevronDown, ArrowUpToLine, ArrowDownToLine,
-  Sparkles, Smartphone, Monitor, Save,
+  Smartphone, Monitor, Save,
 } from "lucide-react"
 import { saveDesign } from "@/actions/design"
 import { Button } from "@/components/ui/button"
@@ -14,14 +14,12 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { ImageUpload } from "@/components/shared/image-upload"
-import { AiGeneratorPanel } from "@/components/editor/ai-generator-panel"
 import { DesignObjectNode } from "@/components/editor/design-object-node"
 import type { DesignObject, CanvasData } from "@/components/editor/types"
-import type { EventType } from "@prisma/client"
 
 const nanoidLike = () => Math.random().toString(36).slice(2, 10)
 
-export function InvitationEditor({ eventId, eventType, design, canAi }: { eventId: string; eventType: EventType; design: { width: number; height: number; canvasJson: unknown }; canAi: boolean }) {
+export function InvitationEditor({ eventId, design }: { eventId: string; design: { width: number; height: number; canvasJson: unknown } }) {
   const initial: CanvasData = (design.canvasJson as CanvasData) ?? { objects: [] }
   const [objects, setObjects] = useState<DesignObject[]>(initial.objects ?? [])
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -29,7 +27,6 @@ export function InvitationEditor({ eventId, eventType, design, canAi }: { eventI
   const [preview, setPreview] = useState<"desktop" | "mobile">("desktop")
   const [dirty, setDirty] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [showAi, setShowAi] = useState(false)
   const svgRef = useRef<SVGSVGElement>(null)
   const historyRef = useRef<DesignObject[][]>([])
   const redoRef = useRef<DesignObject[][]>([])
@@ -186,16 +183,6 @@ export function InvitationEditor({ eventId, eventType, design, canAi }: { eventI
     toast.success("Design saved.")
   }
 
-  function insertAiText(text: string) {
-    snapshot()
-    const base: DesignObject = {
-      id: nanoidLike(), type: "text", x: 40, y: 40, width: design.width - 80, height: 100,
-      rotation: 0, zIndex: objects.length, text, fontSize: 22, color: "var(--brand-plum)", fontWeight: 500, align: "center",
-    }
-    commit([...objects, base])
-    setSelectedId(base.id)
-  }
-
   const sortedObjects = [...objects].sort((a, b) => a.zIndex - b.zIndex)
   const previewWidth = preview === "mobile" ? 375 : design.width
 
@@ -217,7 +204,6 @@ export function InvitationEditor({ eventId, eventType, design, canAi }: { eventI
         <Button size="icon" variant={preview === "desktop" ? "secondary" : "ghost"} className="size-8" onClick={() => setPreview("desktop")}><Monitor className="size-4" /></Button>
         <Button size="icon" variant={preview === "mobile" ? "secondary" : "ghost"} className="size-8" onClick={() => setPreview("mobile")}><Smartphone className="size-4" /></Button>
         <div className="flex-1" />
-        {canAi && <Button size="sm" variant="outline" onClick={() => setShowAi((v) => !v)}><Sparkles className="size-3.5" /> AI Generator</Button>}
         <Button size="sm" onClick={handleSave} disabled={saving}><Save className="size-3.5" /> {saving ? "Saving..." : dirty ? "Save changes" : "Saved"}</Button>
       </div>
 
@@ -248,9 +234,7 @@ export function InvitationEditor({ eventId, eventType, design, canAi }: { eventI
         </div>
 
         <div className="w-72 shrink-0 border-l bg-card overflow-y-auto">
-          {showAi && canAi ? (
-            <AiGeneratorPanel eventId={eventId} eventType={eventType} onInsert={insertAiText} onClose={() => setShowAi(false)} />
-          ) : selected ? (
+          {selected ? (
             <ObjectPanel
               object={selected}
               onChange={updateSelected}

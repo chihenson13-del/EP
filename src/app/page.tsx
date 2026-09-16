@@ -12,7 +12,7 @@ import {
 
 const FEATURES = [
   { icon: LayoutGrid, title: "Digital event websites", body: "A shareable page for every event: hero, schedule, gallery, FAQ, maps, and RSVP — built in minutes." },
-  { icon: Sparkles, title: "Canva-style invitation editor", body: "Drag, resize, layer, and design your own invitation. Or let the AI generator draft the copy for you." },
+  { icon: Sparkles, title: "Canva-style invitation editor", body: "Drag, resize, layer, and design your own invitation exactly the way you want it." },
   { icon: Users, title: "Guest & RSVP management", body: "Personalized RSVP links, plus-ones, custom questions, households, and live response analytics." },
   { icon: LayoutGrid, title: "Visual seating & floor plans", body: "Real tables and chairs you drag into place — not a spreadsheet. Auto seat placement included." },
   { icon: MessageSquareText, title: "Email & SMS reminders", body: "Personalized messages with merge fields, scheduled sends, and delivery tracking." },
@@ -112,7 +112,7 @@ export default function LandingPage() {
         </div>
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <PricingCard name="Free" price={PLAN_PRICING.FREE.price} note="Per event" features={["Basic invitation", "Basic RSVP", "Up to 30 guests", "Basic seating"]} />
-          <PricingCard name="Premium" price={PLAN_PRICING.PREMIUM.price} note="One-time, per event" features={["Premium themes", "Canva-style editor", "AI generator", "Custom RSVP questions", "Advanced seating"]} />
+          <PricingCard name="Premium" price={PLAN_PRICING.PREMIUM.price} note="One-time, per event" features={["Premium themes", "Canva-style editor", "Custom RSVP questions", "Advanced seating"]} />
           <PricingCard name="Pro" price={PLAN_PRICING.PRO.price} note="One-time, per event" features={["Everything in Premium", "Unlimited guests", "Coordinator tools", "Co-branding", "Advanced analytics"]} highlight />
           <PricingCard name="Unlimited" price={PLAN_PRICING.UNLIMITED.price} note="One-time, whole account" features={["Everything in Pro", "Unlimited events", "New events auto-unlock"]} />
         </div>

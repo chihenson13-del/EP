@@ -8,7 +8,7 @@ import type { PlanKey } from "@prisma/client"
 
 const FEATURES: Record<PlanKey, string[]> = {
   FREE: ["Basic invitation", "Basic RSVP", "Up to 30 guests", "Basic seating"],
-  PREMIUM: ["Premium themes", "Canva-style editor", "AI invitation generator", "Custom RSVP questions", "Advanced seating", "Gallery, maps & QR", "Exports", "Remove branding"],
+  PREMIUM: ["Premium themes", "Canva-style editor", "Custom RSVP questions", "Advanced seating", "Gallery, maps & QR", "Exports", "Remove branding"],
   PRO: ["Everything in Premium", "Unlimited guests", "Advanced floor plan", "Coordinator tools", "Client collaboration", "Co-branding", "Advanced analytics & exports"],
   UNLIMITED: ["Everything in Pro", "Applies to your whole account", "Unlimited events", "New events auto-unlock"],
 }
