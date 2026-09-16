@@ -157,11 +157,17 @@ export async function setEventStatus(eventId: string, status: EventStatus): Prom
 
   await db.event.update({
     where: { id: eventId },
-    data: { status, archivedAt: status === "ARCHIVED" ? new Date() : null },
+    data: {
+      status,
+      archivedAt: status === "ARCHIVED" ? new Date() : null,
+      ...(status === "PUBLISHED" ? { isPublic: true } : {}),
+    },
   })
 
   revalidatePath("/dashboard")
   revalidatePath(`/dashboard/events/${eventId}`)
+  const event = await db.event.findUnique({ where: { id: eventId }, select: { slug: true } })
+  if (event) revalidatePath(`/e/${event.slug}`)
   return { ok: true, data: undefined }
 }
 
