@@ -21,8 +21,8 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       <header className="border-b border-border/70 bg-background/95 backdrop-blur sticky top-0 z-40">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
           <Link href="/admin" className="flex items-center gap-2 shrink-0">
-            <Logo />
-            <span className="text-muted-foreground text-sm font-normal">/ Admin</span>
+            <Logo responsive />
+            <span className="text-muted-foreground text-sm font-normal hidden sm:inline">/ Admin</span>
           </Link>
           <nav className="flex items-center gap-1 text-sm overflow-x-auto">
             {NAV.map((item) => (

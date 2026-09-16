@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation"
 import { db } from "@/lib/db"
-import { resolveTheme, fontFamilyFor } from "@/lib/theme-resolve"
+import { resolveTheme, fontPairStyle } from "@/lib/theme-resolve"
 import { RsvpForm } from "@/components/public/rsvp-form"
 import { MusicPlayer } from "@/components/public/music-player"
 
@@ -19,11 +19,15 @@ export default async function GuestRsvpPage({ params }: { params: Promise<{ even
   })
   if (!guest) notFound()
 
-  const theme = resolveTheme(event.page?.theme?.config, event.page?.colors)
+  const theme = resolveTheme(event.page?.theme?.config, event.page?.colors, event.page?.fonts)
   const deadlinePassed = !!(event.rsvpDeadline && new Date() > event.rsvpDeadline && !event.allowLateRsvp)
+  const fontStyle = fontPairStyle(theme.fontPair)
 
   return (
-    <div style={{ backgroundColor: theme.background, fontFamily: fontFamilyFor(theme.font), color: theme.primary }} className="min-h-screen py-12 px-4">
+    <div
+      style={{ backgroundColor: theme.background, color: theme.primary, ...fontStyle.style }}
+      className={`min-h-screen py-12 px-4 font-sans ${fontStyle.className}`}
+    >
       <div className="max-w-lg mx-auto">
         <div className="text-center mb-8">
           <p className="uppercase tracking-[0.2em] text-xs opacity-70 mb-2">You&apos;re invited</p>

@@ -1,9 +1,11 @@
 import { notFound } from "next/navigation"
 import { db } from "@/lib/db"
-import { resolveTheme, fontFamilyFor } from "@/lib/theme-resolve"
+import { resolveTheme, fontPairStyle } from "@/lib/theme-resolve"
 import { getEventTypeConfig } from "@/lib/event-types"
+import { hasFeature, FEATURES } from "@/lib/entitlements"
 import { PublicEventView } from "@/components/public/public-event-view"
 import { MusicPlayer } from "@/components/public/music-player"
+import { BrandingFooter } from "@/components/public/branding-footer"
 
 export default async function PublicEventPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params
@@ -24,12 +26,18 @@ export default async function PublicEventPage({ params }: { params: Promise<{ sl
   if (event.status === "UNPUBLISHED") notFound()
   if (!event.isPublic) notFound()
 
-  const theme = resolveTheme(event.page?.theme?.config, event.page?.colors)
+  const theme = resolveTheme(event.page?.theme?.config, event.page?.colors, event.page?.fonts)
   const typeConfig = getEventTypeConfig(event.type)
+  const showBranding = !(await hasFeature(event.ownerId, event.id, FEATURES.REMOVE_BRANDING))
+  const fontStyle = fontPairStyle(theme.fontPair)
 
   return (
-    <div style={{ backgroundColor: theme.background, fontFamily: fontFamilyFor(theme.font), color: theme.primary }} className="min-h-screen">
+    <div
+      style={{ backgroundColor: theme.background, color: theme.primary, ...fontStyle.style }}
+      className={`min-h-screen font-sans ${fontStyle.className}`}
+    >
       <PublicEventView event={JSON.parse(JSON.stringify(event))} theme={theme} typeLabel={typeConfig.label} />
+      {showBranding && <BrandingFooter />}
       {event.musicEnabled && event.musicYoutubeVideoId && (
         <MusicPlayer
           config={{

@@ -3,21 +3,34 @@
 import { useState } from "react"
 import { toast } from "sonner"
 import { Lock, Check } from "lucide-react"
-import { setEventTheme, updateThemeColors } from "@/actions/content"
+import { setEventTheme, updateThemeColors, updateThemeFonts } from "@/actions/content"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import { UpgradeModal } from "@/components/payments/upgrade-modal"
+import { FONT_PAIRS } from "@/lib/font-pairs"
+import { getFont } from "@/lib/fonts"
+import { COLOR_PALETTES } from "@/lib/color-palettes"
 
 type Theme = { id: string; key: string; name: string; category: string; description: string | null; isPremium: boolean; config: { primary: string; accent: string; background: string } }
 
 export function ThemePicker({
-  eventId, themes, currentThemeId, currentColors, canUsePremiumThemes, canCustomize,
-}: { eventId: string; themes: Theme[]; currentThemeId: string | null; currentColors: Record<string, string>; canUsePremiumThemes: boolean; canCustomize: boolean }) {
+  eventId, themes, currentThemeId, currentColors, currentFontPairKey, canUsePremiumThemes, canCustomize,
+}: {
+  eventId: string
+  themes: Theme[]
+  currentThemeId: string | null
+  currentColors: Record<string, string>
+  currentFontPairKey: string | null
+  canUsePremiumThemes: boolean
+  canCustomize: boolean
+}) {
   const [selected, setSelected] = useState(currentThemeId)
   const [colors, setColors] = useState({ primary: currentColors.primary ?? "", accent: currentColors.accent ?? "", background: currentColors.background ?? "" })
+  const [activePalette, setActivePalette] = useState<string | null>(null)
+  const [fontPairKey, setFontPairKey] = useState(currentFontPairKey ?? FONT_PAIRS[0].key)
   const [upgradeOpen, setUpgradeOpen] = useState(false)
 
   async function pick(theme: Theme) {
@@ -48,6 +61,35 @@ export function ThemePicker({
     toast.success("Colors updated.")
   }
 
+  async function applyPalette(palette: (typeof COLOR_PALETTES)[number]) {
+    if (!canCustomize) {
+      setUpgradeOpen(true)
+      return
+    }
+    const result = await updateThemeColors(eventId, { primary: palette.primary, accent: palette.accent, background: palette.background })
+    if (!result.ok) {
+      toast.error(result.error)
+      return
+    }
+    setColors({ primary: palette.primary, accent: palette.accent, background: palette.background })
+    setActivePalette(palette.key)
+    toast.success(`Palette set to ${palette.label}.`)
+  }
+
+  async function applyFontPair(pairKey: string) {
+    if (!canCustomize) {
+      setUpgradeOpen(true)
+      return
+    }
+    const result = await updateThemeFonts(eventId, pairKey)
+    if (!result.ok) {
+      toast.error(result.error)
+      return
+    }
+    setFontPairKey(pairKey)
+    toast.success("Font pairing updated.")
+  }
+
   return (
     <div className="space-y-8">
       <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -71,6 +113,71 @@ export function ThemePicker({
           </Card>
         ))}
       </div>
+
+      <Card>
+        <CardContent className="p-4 space-y-4">
+          <div>
+            <p className="font-medium">Font pairing {!canCustomize && <span className="text-xs text-muted-foreground font-normal">(Premium+)</span>}</p>
+            <p className="text-xs text-muted-foreground">Sets the heading and body typefaces across your invitation page.</p>
+          </div>
+          <div className="grid sm:grid-cols-2 gap-3">
+            {FONT_PAIRS.map((pair) => {
+              const heading = getFont(pair.heading)
+              const body = getFont(pair.body)
+              const active = fontPairKey === pair.key
+              return (
+                <button
+                  key={pair.key}
+                  type="button"
+                  onClick={() => applyFontPair(pair.key)}
+                  className={`text-left rounded-lg border p-3 transition-colors hover:bg-secondary/50 ${active ? "border-primary ring-1 ring-primary bg-accent/20" : "border-border/70"}`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className={`${heading.className} text-lg`} style={{ fontFamily: heading.cssFamily }}>{pair.label}</span>
+                    {active && <Check className="size-4 text-primary shrink-0" />}
+                  </div>
+                  <span className={`${body.className} text-xs text-muted-foreground`} style={{ fontFamily: body.cssFamily }}>{pair.description}</span>
+                </button>
+              )
+            })}
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="p-4 space-y-4">
+          <div>
+            <p className="font-medium">Color palettes {!canCustomize && <span className="text-xs text-muted-foreground font-normal">(Premium+)</span>}</p>
+            <p className="text-xs text-muted-foreground">Curated combinations — pick one, or fine-tune below.</p>
+          </div>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            {COLOR_PALETTES.map((palette) => {
+              const active = activePalette === palette.key || (colors.primary === palette.primary && colors.accent === palette.accent && colors.background === palette.background)
+              return (
+                <button
+                  key={palette.key}
+                  type="button"
+                  onClick={() => applyPalette(palette)}
+                  className={`text-left rounded-lg border overflow-hidden transition-shadow hover:shadow-sm ${active ? "border-primary ring-1 ring-primary" : "border-border/70"}`}
+                >
+                  <div className="h-12 flex">
+                    <div className="w-1/3" style={{ background: palette.primary }} />
+                    <div className="w-1/3" style={{ background: palette.accent }} />
+                    <div className="w-1/3" style={{ background: palette.background }} />
+                  </div>
+                  <div className="p-2">
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs font-medium">{palette.label}</p>
+                      {active && <Check className="size-3.5 text-primary shrink-0" />}
+                    </div>
+                    <p className="text-[10px] text-muted-foreground">{palette.description}</p>
+                  </div>
+                </button>
+              )
+            })}
+          </div>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardContent className="p-4 space-y-3">

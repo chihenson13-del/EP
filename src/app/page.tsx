@@ -2,7 +2,7 @@ import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Logo } from "@/components/brand/logo"
+import { Logo, LogoFull } from "@/components/brand/logo"
 import { EVENT_TYPE_OPTIONS } from "@/lib/event-types"
 import { PLAN_PRICING, formatPHP } from "@/lib/entitlements"
 import {
@@ -24,7 +24,7 @@ export default function LandingPage() {
     <div className="flex flex-col">
       <header className="border-b border-border/70 bg-background/95 backdrop-blur sticky top-0 z-40">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 h-16 flex items-center justify-between">
-          <Logo />
+          <Logo responsive />
           <div className="flex items-center gap-2">
             <Button variant="ghost" asChild>
               <Link href="/login">Log in</Link>
@@ -39,6 +39,7 @@ export default function LandingPage() {
       <section className="relative overflow-hidden">
         <div className="absolute inset-0 -z-10 bg-[radial-gradient(circle_at_20%_-10%,var(--brand-lavender),transparent_60%)] opacity-60" />
         <div className="mx-auto max-w-5xl px-4 sm:px-6 pt-20 pb-16 text-center space-y-6">
+          <LogoFull width={140} className="mx-auto" />
           <Badge variant="outline" className="border-primary/30 text-primary bg-accent/30">For every kind of event — not just weddings</Badge>
           <h1 className="font-heading text-4xl sm:text-6xl font-semibold tracking-tight text-balance">
             Plan, invite, and manage any event — beautifully.

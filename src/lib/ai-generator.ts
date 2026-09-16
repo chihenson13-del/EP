@@ -26,9 +26,8 @@ function pick<T>(arr: T[]): T {
 }
 
 /**
- * Provider-ready AI copy generator. If ANTHROPIC_API_KEY is configured this is the seam
- * where a real LLM call would go; without one, it falls back to a genuinely working
- * rule-based generator (not a placeholder) so the feature always produces real output.
+ * Rule-based invitation copy generator (the "AI generator" Premium feature). Deterministic —
+ * no external API calls — so it always produces real output with zero configuration.
  */
 export async function generateInvitationCopy(input: AiGenerateInput): Promise<AiGenerateOutput> {
   const typeConfig = getEventTypeConfig(input.eventType)

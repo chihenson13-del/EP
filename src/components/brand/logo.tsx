@@ -1,33 +1,62 @@
+import Image from "next/image"
 import { cn } from "@/lib/utils"
+import monogram from "../../../public/branding/logo-monogram.png"
+import fullLogo from "../../../public/branding/logo-full.png"
 
 /**
- * Minimal abstract mark: an open invitation card with a folded corner — reads as
- * "envelope / invitation / connection" without leaning on any single event type
- * (no rings, no cake, nothing wedding- or birthday-specific).
+ * Official Events Partner brand mark — the EP monogram cropped from the approved
+ * logo artwork (public/branding/logo-monogram.png). Never redraw or recolor this;
+ * if a different crop or size is needed, re-crop from public/branding/logo-full.png.
  */
 export function LogoMark({ className }: { className?: string }) {
   return (
-    <svg viewBox="0 0 32 32" fill="none" className={cn("shrink-0", className)} aria-hidden="true">
-      <rect x="3" y="6" width="26" height="20" rx="4" fill="var(--brand-lavender)" />
-      <path d="M3 10.5 L16 19 L29 10.5" stroke="var(--brand-purple-deep)" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" fill="none" />
-      <rect x="3" y="6" width="26" height="20" rx="4" stroke="var(--brand-purple-deep)" strokeWidth="1.25" fill="none" />
-      <circle cx="16" cy="6" r="2.25" fill="var(--brand-purple-pastel)" />
-    </svg>
+    <Image
+      src={monogram}
+      alt=""
+      className={cn("shrink-0 object-contain", className)}
+      priority
+    />
   )
 }
 
-export function Logo({ className, markClassName, textClassName }: { className?: string; markClassName?: string; textClassName?: string }) {
+/**
+ * Compact horizontal lockup: monogram + wordmark, for nav bars and headers.
+ * Pass `responsive` in space-constrained top bars to drop to monogram-only below `sm`.
+ */
+export function Logo({
+  className, markClassName, textClassName, responsive = false,
+}: {
+  className?: string
+  markClassName?: string
+  textClassName?: string
+  responsive?: boolean
+}) {
   return (
     <span className={cn("inline-flex items-center gap-2", className)}>
-      <LogoMark className={cn("size-6", markClassName)} />
-      <span className={cn("font-heading font-semibold tracking-tight text-lg", textClassName)}>
+      <LogoMark className={cn("size-8", markClassName)} />
+      <span className={cn("font-heading font-semibold tracking-tight text-lg", responsive && "hidden sm:inline-block", textClassName)}>
         Events <span className="text-primary">Partner</span>
       </span>
     </span>
   )
 }
 
-/** Stacked two-line wordmark for hero/marketing contexts. */
+/** Full official logo artwork (monogram + wordmark + tagline) for prominent, larger placements. */
+export function LogoFull({ className, width = 220 }: { className?: string; width?: number }) {
+  return (
+    <Image
+      src={fullLogo}
+      alt="Events Partner — Plan · Invite · Celebrate"
+      width={width}
+      height={width}
+      className={cn("h-auto", className)}
+      style={{ width, height: "auto" }}
+      priority
+    />
+  )
+}
+
+/** Stacked two-line wordmark for compact marketing contexts where the full artwork doesn't fit. */
 export function LogoStacked({ className }: { className?: string }) {
   return (
     <span className={cn("inline-flex flex-col items-start", className)}>

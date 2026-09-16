@@ -105,6 +105,22 @@ export async function updateThemeColors(eventId: string, colors: Record<string, 
   return { ok: true, data: undefined }
 }
 
+export async function updateThemeFonts(eventId: string, pairKey: string): Promise<ActionResult> {
+  const user = await requireUser()
+  await requireEventAccess(user.id, eventId).catch(() => { throw new Error("NO_ACCESS") })
+  const allowed = await hasFeature(user.id, eventId, FEATURES.ADVANCED_THEME_CUSTOMIZATION)
+  if (!allowed) return { ok: false, error: "Custom font pairing requires Premium or higher." }
+
+  await db.eventPage.upsert({
+    where: { eventId },
+    update: { fonts: toJson({ pairKey }) },
+    create: { eventId, fonts: toJson({ pairKey }) },
+  })
+  revalidatePath(`/dashboard/events/${eventId}/theme`)
+  revalidatePath(`/e`)
+  return { ok: true, data: undefined }
+}
+
 // ── Schedule ─────────────────────────────────────────────────────────────
 
 export async function upsertScheduleItem(eventId: string, item: { id?: string; time: string; title: string; description?: string; location?: string }): Promise<ActionResult<{ id: string }>> {
