@@ -2,6 +2,7 @@ import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion"
 import { Logo, LogoFull } from "@/components/brand/logo"
 import { EVENT_TYPE_OPTIONS } from "@/lib/event-types"
 import { PLAN_PRICING, formatPHP } from "@/lib/entitlements"
@@ -9,6 +10,41 @@ import {
   CalendarDays, Users, LayoutGrid, Sparkles, QrCode, MessageSquareText,
   MapPin, CheckCircle2, ArrowRight,
 } from "lucide-react"
+
+const FAQS = [
+  {
+    q: "Do my guests need to download an app?",
+    a: "No. Every invitation, RSVP form, and check-in flow runs entirely in the browser. Guests just open their link on any phone or computer — nothing to install.",
+  },
+  {
+    q: "Can I import my existing guest list?",
+    a: "Yes. Upload a CSV of names, emails, and phone numbers and Events Partner adds them straight to your guest list — no manual retyping.",
+  },
+  {
+    q: "How do personalized RSVP links work?",
+    a: "Every guest gets their own unique RSVP link, pre-filled with their name. They confirm attendance, add plus-ones, and answer your custom questions without creating an account.",
+  },
+  {
+    q: "Can I track meal preferences and plus-ones?",
+    a: "Yes. You can allow plus-ones per guest, collect meal preferences and dietary restrictions on the RSVP form, and see it all in one guest table.",
+  },
+  {
+    q: "Is this a subscription?",
+    a: "No. Every plan is a one-time payment — per event, or once for Unlimited to cover your whole account. There are no recurring charges, ever.",
+  },
+  {
+    q: "How does payment work?",
+    a: "Payments are manual: scan the QR code shown at checkout, pay through your banking or e-wallet app, then upload your proof of payment. An admin reviews and approves it — your plan unlocks right after.",
+  },
+  {
+    q: "Can I use this for more than one event?",
+    a: "Yes. Free, Premium, and Pro apply per event, so you can mix plans across events. The Unlimited plan applies to your whole account and auto-unlocks every event you create afterward.",
+  },
+  {
+    q: "Is this only for weddings?",
+    a: "No. Events Partner works for birthdays, kids parties, debuts, baptisms, graduations, corporate events, conferences, reunions, and more — pick an event type when you create it.",
+  },
+]
 
 const FEATURES = [
   { icon: LayoutGrid, title: "Digital event websites", body: "A shareable page for every event: hero, schedule, gallery, FAQ, maps, and RSVP — built in minutes." },
@@ -25,6 +61,10 @@ export default function LandingPage() {
       <header className="border-b border-border/70 bg-background/95 backdrop-blur sticky top-0 z-40">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 h-16 flex items-center justify-between">
           <Logo responsive />
+          <nav className="hidden md:flex items-center gap-6 text-sm font-medium text-muted-foreground">
+            <Link href="#pricing" className="hover:text-foreground transition-colors">Pricing</Link>
+            <Link href="#faq" className="hover:text-foreground transition-colors">FAQ</Link>
+          </nav>
           <div className="flex items-center gap-2">
             <Button variant="ghost" asChild>
               <Link href="/login">Log in</Link>
@@ -115,6 +155,32 @@ export default function LandingPage() {
           <PricingCard name="Premium" price={PLAN_PRICING.PREMIUM.price} note="One-time, per event" features={["Premium themes", "Canva-style editor", "Custom RSVP questions", "Advanced seating"]} />
           <PricingCard name="Pro" price={PLAN_PRICING.PRO.price} note="One-time, per event" features={["Everything in Premium", "Unlimited guests", "Coordinator tools", "Co-branding", "Advanced analytics"]} highlight />
           <PricingCard name="Unlimited" price={PLAN_PRICING.UNLIMITED.price} note="One-time, whole account" features={["Everything in Pro", "Unlimited events", "New events auto-unlock"]} />
+        </div>
+      </section>
+
+      <section id="faq" className="bg-secondary/40 py-20">
+        <div className="mx-auto max-w-3xl px-4 sm:px-6">
+          <div className="text-center mb-10 space-y-2">
+            <h2 className="font-heading text-3xl font-semibold tracking-tight">Questions? We've got answers.</h2>
+            <p className="text-muted-foreground">Everything you need to know about creating your event page and managing your guest list.</p>
+          </div>
+          <Card className="p-2 sm:p-4 border-border/70 shadow-xs">
+            <Accordion type="single" collapsible className="px-2">
+              {FAQS.map((item) => (
+                <AccordionItem key={item.q} value={item.q}>
+                  <AccordionTrigger className="text-base font-heading font-medium py-4">{item.q}</AccordionTrigger>
+                  <AccordionContent className="text-muted-foreground pb-4">{item.a}</AccordionContent>
+                </AccordionItem>
+              ))}
+            </Accordion>
+          </Card>
+          <div className="text-center mt-8">
+            <Button size="lg" asChild>
+              <Link href="/register">
+                Create your first event <ArrowRight className="size-4" />
+              </Link>
+            </Button>
+          </div>
         </div>
       </section>
 
