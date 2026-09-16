@@ -1,0 +1,789 @@
+// Events Partner — Prisma schema
+// Source of truth for all persisted application data.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// AUTH (Auth.js / NextAuth)
+// ─────────────────────────────────────────────────────────────────────────
+
+enum UserRole {
+  USER
+  ADMIN
+}
+
+model User {
+  id               String    @id @default(cuid())
+  name             String?
+  email            String    @unique
+  emailVerified    DateTime?
+  passwordHash     String?
+  image            String?
+  role             UserRole  @default(USER)
+  businessName     String?
+  brandLogoUrl     String?
+  brandColor       String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  accounts         Account[]
+  sessions         Session[]
+
+  events           Event[]              @relation("EventOwner")
+  collaborations   EventCollaborator[]
+  purchases        Purchase[]
+  entitlements     Entitlement[]
+  activityLogs     ActivityLog[]        @relation("ActivityActor")
+  approvedPurchases Purchase[]          @relation("PurchaseApprover")
+
+  passwordResetTokens PasswordResetToken[]
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  expires   DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// EVENTS
+// ─────────────────────────────────────────────────────────────────────────
+
+enum EventType {
+  BIRTHDAY
+  KIDS_PARTY
+  WEDDING
+  DEBUT
+  BAPTISM
+  GRADUATION
+  ANNIVERSARY
+  BABY_SHOWER
+  BRIDAL_SHOWER
+  CORPORATE
+  CONFERENCE
+  SEMINAR
+  SCHOOL_EVENT
+  FAMILY_REUNION
+  DINNER
+  PARTY
+  COMMUNITY_EVENT
+  PRODUCT_LAUNCH
+  COMPANY_CELEBRATION
+  CUSTOM
+}
+
+enum EventStatus {
+  DRAFT
+  PUBLISHED
+  UNPUBLISHED
+  ARCHIVED
+}
+
+model Event {
+  id          String      @id @default(cuid())
+  ownerId     String
+  owner       User        @relation("EventOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+
+  type        EventType
+  customTypeLabel String?
+  name        String
+  slug        String      @unique
+  status      EventStatus @default(DRAFT)
+
+  hostName    String?
+  date        DateTime?
+  endDate     DateTime?
+  timeLabel   String?
+  timezone    String      @default("Asia/Manila")
+
+  venueName   String?
+  address     String?
+  mapUrl      String?
+  latitude    Float?
+  longitude   Float?
+
+  description String?     @db.Text
+  coverImageUrl String?
+
+  rsvpDeadline    DateTime?
+  allowLateRsvp   Boolean   @default(false)
+  allowMaybe      Boolean   @default(true)
+  personalizedRsvpOnly Boolean @default(true)
+
+  isPublic          Boolean @default(false)
+  guestListVisible  Boolean @default(false)
+  rsvpVisible       Boolean @default(true)
+
+  // Background music (YouTube)
+  musicEnabled      Boolean @default(false)
+  musicYoutubeUrl   String?
+  musicYoutubeVideoId String?
+  musicTitle        String?
+  musicAutoplay     Boolean @default(false)
+  musicStartMuted   Boolean @default(true)
+  musicLoop         Boolean @default(true)
+  musicVolume       Int     @default(50)
+  musicShowControl  Boolean @default(true)
+  musicShowPlayer   Boolean @default(false)
+
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  archivedAt  DateTime?
+
+  collaborators   EventCollaborator[]
+  guests          Guest[]
+  guestGroups     GuestGroup[]
+  customQuestions CustomQuestion[]
+  page            EventPage?
+  sections        EventSection[]
+  design          EventDesign?
+  scheduleItems   ScheduleItem[]
+  galleryImages   GalleryImage[]
+  floorPlan       FloorPlan?
+  tables          Table[]
+  floorObjects    FloorObject[]
+  messageTemplates MessageTemplate[]
+  messageLogs     MessageLog[]
+  purchases       Purchase[]
+  entitlements    Entitlement[]
+  checkInLogs     CheckInLog[]
+}
+
+enum CollaboratorRole {
+  OWNER
+  COORDINATOR
+  CLIENT
+  VIEWER
+}
+
+enum CollaboratorStatus {
+  INVITED
+  ACTIVE
+  REVOKED
+}
+
+model EventCollaborator {
+  id            String              @id @default(cuid())
+  eventId       String
+  event         Event               @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  userId        String?
+  user          User?               @relation(fields: [userId], references: [id], onDelete: SetNull)
+  invitedEmail  String
+  role          CollaboratorRole    @default(CLIENT)
+  status        CollaboratorStatus  @default(INVITED)
+  invitedAt     DateTime            @default(now())
+  respondedAt   DateTime?
+
+  @@index([eventId])
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// EVENT WEBSITE / INVITATION
+// ─────────────────────────────────────────────────────────────────────────
+
+model EventTheme {
+  id            String   @id @default(cuid())
+  key           String   @unique
+  name          String
+  category      String
+  description   String?
+  previewImageUrl String?
+  config        Json
+  isPremium     Boolean  @default(false)
+  createdAt     DateTime @default(now())
+
+  pages EventPage[]
+}
+
+model EventPage {
+  eventId       String   @id
+  event         Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  themeId       String?
+  theme         EventTheme? @relation(fields: [themeId], references: [id])
+
+  colors        Json?
+  fonts         Json?
+  layout        Json?
+
+  published     Boolean  @default(false)
+  publishedAt   DateTime?
+  updatedAt     DateTime @updatedAt
+}
+
+enum SectionType {
+  HERO
+  HOST
+  COUNTDOWN
+  VENUE
+  DESCRIPTION
+  SCHEDULE
+  GALLERY
+  RSVP
+  FAQ
+  DRESS_CODE
+  GIFT_INFO
+  CUSTOM
+  FOOTER
+}
+
+model EventSection {
+  id        String      @id @default(cuid())
+  eventId   String
+  event     Event       @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  type      SectionType
+  order     Int
+  visible   Boolean     @default(true)
+  content   Json
+
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  @@index([eventId])
+}
+
+model EventDesign {
+  eventId   String   @id
+  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  width     Int      @default(1000)
+  height    Int      @default(1400)
+  canvasJson Json    @default("{\"objects\":[]}")
+  updatedAt DateTime @updatedAt
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// GUESTS / RSVP
+// ─────────────────────────────────────────────────────────────────────────
+
+model GuestGroup {
+  id        String   @id @default(cuid())
+  eventId   String
+  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  name      String
+  createdAt DateTime @default(now())
+
+  guests    Guest[]
+
+  @@index([eventId])
+}
+
+enum RsvpStatus {
+  PENDING
+  ATTENDING
+  DECLINED
+  MAYBE
+}
+
+model Guest {
+  id            String      @id @default(cuid())
+  eventId       String
+  event         Event       @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  groupId       String?
+  group         GuestGroup? @relation(fields: [groupId], references: [id], onDelete: SetNull)
+
+  firstName     String
+  lastName      String?
+  email         String?
+  phone         String?
+  category      String?
+
+  plusOneAllowed Boolean    @default(false)
+  maxPlusOnes    Int        @default(0)
+  childrenCount  Int        @default(0)
+
+  mealPreference String?
+  dietaryRestrictions String?
+  notes          String?    @db.Text
+
+  rsvpToken      String     @unique @default(cuid())
+  rsvpStatus     RsvpStatus @default(PENDING)
+  numberAttending Int?
+  respondedAt    DateTime?
+
+  checkedIn      Boolean    @default(false)
+  checkedInAt    DateTime?
+
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  plusOnes       PlusOne[]
+  answers        CustomAnswer[]
+  chair          Chair?
+  messageLogs    MessageLog[]
+  checkInLogs    CheckInLog[]
+
+  @@index([eventId])
+  @@index([eventId, rsvpStatus])
+}
+
+model PlusOne {
+  id             String  @id @default(cuid())
+  guestId        String
+  guest          Guest   @relation(fields: [guestId], references: [id], onDelete: Cascade)
+  name           String?
+  mealPreference String?
+}
+
+enum QuestionType {
+  YES_NO
+  MULTIPLE_CHOICE
+  CHECKBOX
+  DROPDOWN
+  SHORT_TEXT
+  LONG_TEXT
+  NUMBER
+}
+
+model CustomQuestion {
+  id        String       @id @default(cuid())
+  eventId   String
+  event     Event        @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  label     String
+  type      QuestionType
+  required  Boolean      @default(false)
+  options   Json?
+  order     Int          @default(0)
+
+  answers   CustomAnswer[]
+
+  @@index([eventId])
+}
+
+model CustomAnswer {
+  id         String         @id @default(cuid())
+  guestId    String
+  guest      Guest          @relation(fields: [guestId], references: [id], onDelete: Cascade)
+  questionId String
+  question   CustomQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  value      Json
+
+  @@unique([guestId, questionId])
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// SEATING / FLOOR PLAN
+// ─────────────────────────────────────────────────────────────────────────
+
+model FloorPlan {
+  eventId         String   @id
+  event           Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  width           Int      @default(1600)
+  height          Int      @default(1000)
+  gridSize        Int      @default(20)
+  snapToGrid      Boolean  @default(true)
+  backgroundColor String   @default("#fff9f2")
+  updatedAt       DateTime @updatedAt
+}
+
+enum TableShape {
+  ROUND_SMALL
+  ROUND_MEDIUM
+  ROUND_LARGE
+  RECT_SMALL
+  RECT_MEDIUM
+  RECT_LARGE
+  RECT_LONG
+  SQUARE_SMALL
+  SQUARE_LARGE
+  OVAL_SMALL
+  OVAL_LARGE
+  BANQUET_LONG
+  BANQUET_XLONG
+  HALF_CIRCLE
+  CRESCENT
+  U_SHAPE
+  T_SHAPE
+  L_SHAPE
+  CUSTOM
+}
+
+model Table {
+  id            String     @id @default(cuid())
+  eventId       String
+  event         Event      @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  name          String
+  number        Int?
+  shape         TableShape
+  width         Float
+  height        Float
+  x             Float      @default(100)
+  y             Float      @default(100)
+  rotation      Float      @default(0)
+  capacity      Int        @default(8)
+
+  color         String     @default("#fffcf8")
+  borderColor   String     @default("#6f5a86")
+  borderWidth   Int        @default(2)
+  labelVisible  Boolean    @default(true)
+  seatSpacing   Int        @default(10)
+  locked        Boolean    @default(false)
+
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  chairs        Chair[]
+
+  @@index([eventId])
+}
+
+enum ChairStyle {
+  STANDARD
+  BANQUET
+  ELEGANT
+  MODERN
+  OFFICE
+  CONFERENCE
+  STOOL
+  LOUNGE
+}
+
+enum SeatStatus {
+  EMPTY
+  ASSIGNED
+  CHECKED_IN
+  VIP
+  RESERVED
+}
+
+model Chair {
+  id         String     @id @default(cuid())
+  tableId    String
+  table      Table      @relation(fields: [tableId], references: [id], onDelete: Cascade)
+
+  seatNumber Int
+  x          Float
+  y          Float
+  rotation   Float      @default(0)
+  style      ChairStyle @default(STANDARD)
+  status     SeatStatus @default(EMPTY)
+  notes      String?
+
+  guestId    String?    @unique
+  guest      Guest?     @relation(fields: [guestId], references: [id], onDelete: SetNull)
+
+  @@index([tableId])
+}
+
+enum FloorObjectType {
+  STAGE
+  DANCE_FLOOR
+  BUFFET
+  BAR
+  REGISTRATION
+  ENTRANCE
+  EXIT
+  RESTROOM
+  PHOTO_BOOTH
+  GIFT_TABLE
+  DJ_BOOTH
+  PODIUM
+  BOOTH
+  CUSTOM
+}
+
+model FloorObject {
+  id       String          @id @default(cuid())
+  eventId  String
+  event    Event           @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  type     FloorObjectType
+  label    String
+  x        Float
+  y        Float
+  width    Float
+  height   Float
+  rotation Float           @default(0)
+  color    String          @default("#f3e8dc")
+  locked   Boolean         @default(false)
+
+  @@index([eventId])
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// COMMUNICATION
+// ─────────────────────────────────────────────────────────────────────────
+
+enum MessageChannel {
+  EMAIL
+  SMS
+}
+
+enum MessageType {
+  INVITATION
+  REMINDER
+  CUSTOM
+}
+
+model MessageTemplate {
+  id        String         @id @default(cuid())
+  eventId   String
+  event     Event          @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  channel   MessageChannel
+  type      MessageType
+  subject   String?
+  body      String         @db.Text
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  @@index([eventId])
+}
+
+enum MessageStatus {
+  PENDING
+  SENT
+  FAILED
+  MOCK_SENT
+  SCHEDULED
+}
+
+model MessageLog {
+  id          String         @id @default(cuid())
+  eventId     String
+  event       Event          @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  guestId     String?
+  guest       Guest?         @relation(fields: [guestId], references: [id], onDelete: SetNull)
+  channel     MessageChannel
+  type        MessageType
+  status      MessageStatus  @default(PENDING)
+  subject     String?
+  body        String         @db.Text
+  provider    String?
+  isMock      Boolean        @default(true)
+  scheduledFor DateTime?
+  sentAt      DateTime?
+  errorMessage String?
+  createdAt   DateTime       @default(now())
+
+  @@index([eventId])
+  @@index([guestId])
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// SCHEDULE / GALLERY
+// ─────────────────────────────────────────────────────────────────────────
+
+model ScheduleItem {
+  id          String   @id @default(cuid())
+  eventId     String
+  event       Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  time        String
+  title       String
+  description String?
+  location    String?
+  order       Int      @default(0)
+
+  @@index([eventId])
+}
+
+model GalleryImage {
+  id        String   @id @default(cuid())
+  eventId   String
+  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  url       String
+  caption   String?
+  order     Int      @default(0)
+  hidden    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([eventId])
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// CHECK-IN AUDIT
+// ─────────────────────────────────────────────────────────────────────────
+
+enum CheckInAction {
+  CHECK_IN
+  UNDO_CHECK_IN
+}
+
+model CheckInLog {
+  id       String        @id @default(cuid())
+  eventId  String
+  event    Event         @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  guestId  String
+  guest    Guest         @relation(fields: [guestId], references: [id], onDelete: Cascade)
+  action   CheckInAction
+  byUserId String?
+  at       DateTime      @default(now())
+
+  @@index([eventId])
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// PLANS / PAYMENTS / ENTITLEMENTS
+// ─────────────────────────────────────────────────────────────────────────
+
+enum PlanKey {
+  FREE
+  PREMIUM
+  PRO
+  UNLIMITED
+}
+
+enum PlanScope {
+  EVENT
+  ACCOUNT
+}
+
+model Plan {
+  id       String    @id @default(cuid())
+  key      PlanKey   @unique
+  name     String
+  price    Int
+  currency String    @default("PHP")
+  scope    PlanScope
+  features Json
+
+  purchases    Purchase[]
+  entitlements Entitlement[]
+}
+
+enum PaymentStatus {
+  PENDING
+  SUBMITTED
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+  FAILED
+  CANCELLED
+}
+
+model Purchase {
+  id               String        @id @default(cuid())
+  userId           String
+  user             User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  eventId          String?
+  event            Event?        @relation(fields: [eventId], references: [id], onDelete: SetNull)
+  planId           String
+  plan             Plan          @relation(fields: [planId], references: [id])
+
+  amount           Int
+  currency         String        @default("PHP")
+  paymentReference String?
+  paymentMethod    String?
+  proofImageUrl    String?
+  status           PaymentStatus @default(PENDING)
+
+  purchasedAt      DateTime      @default(now())
+  approvedAt       DateTime?
+  approvedById     String?
+  approvedBy       User?         @relation("PurchaseApprover", fields: [approvedById], references: [id])
+  rejectedReason   String?
+
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  entitlement      Entitlement?
+
+  @@index([userId])
+  @@index([eventId])
+  @@index([status])
+}
+
+enum EntitlementStatus {
+  ACTIVE
+  REVOKED
+}
+
+model Entitlement {
+  id           String            @id @default(cuid())
+  userId       String
+  user         User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  eventId      String?
+  event        Event?            @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  planId       String
+  plan         Plan              @relation(fields: [planId], references: [id])
+  scope        PlanScope
+  status       EntitlementStatus @default(ACTIVE)
+  purchaseId   String?           @unique
+  purchase     Purchase?         @relation(fields: [purchaseId], references: [id])
+
+  grantedManually Boolean  @default(false)
+  grantReason     String?
+  grantedById     String?
+
+  activatedAt  DateTime          @default(now())
+  revokedAt    DateTime?
+
+  @@index([userId])
+  @@index([eventId])
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// ADMIN / AUDIT
+// ─────────────────────────────────────────────────────────────────────────
+
+model ActivityLog {
+  id         String   @id @default(cuid())
+  actorId    String?
+  actor      User?    @relation("ActivityActor", fields: [actorId], references: [id], onDelete: SetNull)
+  action     String
+  targetType String
+  targetId   String?
+  metadata   Json?
+  createdAt  DateTime @default(now())
+
+  @@index([actorId])
+  @@index([targetType, targetId])
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// PLATFORM SETTINGS (manual payment QR / receiving account info)
+// ─────────────────────────────────────────────────────────────────────────
+
+model PlatformSettings {
+  id                 String   @id @default("default")
+  paymentQrImageUrl  String?  @db.Text
+  paymentAccountName String?
+  paymentAccountInfo String?
+  paymentInstructions String?  @db.Text
+  updatedAt          DateTime @updatedAt
+  updatedById        String?
+}

@@ -1,0 +1,28 @@
+import { notFound } from "next/navigation"
+import { requireUser } from "@/lib/session"
+import { db } from "@/lib/db"
+import { GuestsTable } from "@/components/guests/guests-table"
+
+export default async function GuestsPage({ params }: { params: Promise<{ eventId: string }> }) {
+  await requireUser()
+  const { eventId } = await params
+
+  const event = await db.event.findUnique({ where: { id: eventId }, select: { id: true, name: true, slug: true } })
+  if (!event) notFound()
+
+  const guests = await db.guest.findMany({
+    where: { eventId },
+    orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
+    include: { plusOnes: true, chair: { include: { table: true } } },
+  })
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="font-heading text-2xl font-bold tracking-tight">Guests</h1>
+        <p className="text-muted-foreground text-sm mt-1">{guests.length} guest{guests.length === 1 ? "" : "s"} on the list.</p>
+      </div>
+      <GuestsTable eventId={eventId} eventSlug={event.slug} guests={JSON.parse(JSON.stringify(guests))} />
+    </div>
+  )
+}
