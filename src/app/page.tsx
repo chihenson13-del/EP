@@ -62,6 +62,7 @@ export default function LandingPage() {
         <div className="mx-auto max-w-7xl px-4 sm:px-6 h-16 flex items-center justify-between">
           <Logo responsive />
           <nav className="hidden md:flex items-center gap-6 text-sm font-medium text-muted-foreground">
+            <Link href="/themes" className="hover:text-foreground transition-colors">Themes</Link>
             <Link href="#pricing" className="hover:text-foreground transition-colors">Pricing</Link>
             <Link href="#faq" className="hover:text-foreground transition-colors">FAQ</Link>
           </nav>
