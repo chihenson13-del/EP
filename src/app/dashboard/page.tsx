@@ -3,6 +3,8 @@ import { db } from "@/lib/db"
 import { hasUnlimitedAccount } from "@/lib/entitlements"
 import { CreateEventDialog } from "@/components/events/create-event-dialog"
 import { EventsBoard } from "@/components/events/events-board"
+import { BookingCalendarCard } from "@/components/dashboard/booking-calendar-card"
+import { getBookingStatus, currentTimestamp } from "@/lib/booking-calendar"
 
 export default async function DashboardPage() {
   const user = await requireUser()
@@ -53,19 +55,30 @@ export default async function DashboardPage() {
 
   const firstName = user.name?.split(" ")[0]
 
+  const now = currentTimestamp()
+  const upcomingBookings = ownedEvents
+    .filter((e) => e.date && e.date.getTime() >= now)
+    .filter((e) => getBookingStatus({ status: e.status, date: e.date }) === "CONFIRMED")
+    .sort((a, b) => a.date!.getTime() - b.date!.getTime())
+    .slice(0, 3)
+    .map((e) => ({ id: e.id, name: e.name, date: e.date!.toISOString(), timeLabel: e.timeLabel }))
+
   return (
     <div className="mx-auto max-w-7xl px-4 sm:px-6 py-10 space-y-8">
-      <div className="rounded-2xl border border-border/70 bg-card px-6 py-8 sm:px-8 sm:py-10">
-        <div className="flex flex-wrap items-center justify-between gap-6">
-          <div>
-            <p className="text-sm text-muted-foreground mb-1">Welcome back{firstName ? `, ${firstName}` : ""}</p>
-            <h1 className="font-heading text-3xl font-semibold tracking-tight">My Events</h1>
-            <p className="text-muted-foreground text-sm mt-2">
-              {unlimited ? "Unlimited Access — create as many events as you like." : "Create and manage every event in one place."}
-            </p>
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4">
+        <div className="rounded-2xl border border-border/70 bg-card px-6 py-8 sm:px-8 sm:py-10">
+          <div className="flex flex-wrap items-center justify-between gap-6">
+            <div>
+              <p className="text-sm text-muted-foreground mb-1">Welcome back{firstName ? `, ${firstName}` : ""}</p>
+              <h1 className="font-heading text-3xl font-semibold tracking-tight">My Events</h1>
+              <p className="text-muted-foreground text-sm mt-2">
+                {unlimited ? "Unlimited Access — create as many events as you like." : "Create and manage every event in one place."}
+              </p>
+            </div>
+            <CreateEventDialog />
           </div>
-          <CreateEventDialog />
         </div>
+        <BookingCalendarCard unlimited={unlimited} upcoming={upcomingBookings} />
       </div>
 
       <EventsBoard events={[...events, ...collaboratorEvents]} />

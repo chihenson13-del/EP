@@ -162,7 +162,7 @@ export default function LandingPage() {
       <section id="faq" className="bg-secondary/40 py-20">
         <div className="mx-auto max-w-3xl px-4 sm:px-6">
           <div className="text-center mb-10 space-y-2">
-            <h2 className="font-heading text-3xl font-semibold tracking-tight">Questions? We've got answers.</h2>
+            <h2 className="font-heading text-3xl font-semibold tracking-tight">Questions? We&apos;ve got answers.</h2>
             <p className="text-muted-foreground">Everything you need to know about creating your event page and managing your guest list.</p>
           </div>
           <Card className="p-2 sm:p-4 border-border/70 shadow-xs">
