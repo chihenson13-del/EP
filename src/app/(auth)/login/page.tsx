@@ -36,7 +36,7 @@ function LoginForm() {
     router.refresh()
   }
 
-  async function oauth(provider: "google" | "facebook") {
+  async function oauth(provider: "google") {
     await signIn(provider, { callbackUrl })
   }
 
@@ -47,10 +47,7 @@ function LoginForm() {
         <CardDescription>Log in to manage your events.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="grid grid-cols-2 gap-2">
-          <Button variant="outline" type="button" onClick={() => oauth("google")}>Google</Button>
-          <Button variant="outline" type="button" onClick={() => oauth("facebook")}>Facebook</Button>
-        </div>
+        <Button variant="outline" type="button" className="w-full" onClick={() => oauth("google")}>Google</Button>
         <div className="relative text-center text-xs text-muted-foreground before:absolute before:inset-y-1/2 before:left-0 before:h-px before:w-[42%] before:bg-border after:absolute after:inset-y-1/2 after:right-0 after:h-px after:w-[42%] after:bg-border">
           or
         </div>
