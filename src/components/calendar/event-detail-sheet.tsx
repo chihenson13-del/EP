@@ -1,6 +1,6 @@
 "use client"
 
-import { useTransition } from "react"
+import { useState, useTransition } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { format } from "date-fns"
@@ -15,7 +15,7 @@ import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { setEventStatus } from "@/actions/events"
 import { getEventTypeConfig } from "@/lib/event-types"
@@ -26,6 +26,7 @@ import type { CalendarEvent } from "./types"
 export function EventDetailSheet({ event, open, onOpenChange }: { event: CalendarEvent | null; open: boolean; onOpenChange: (open: boolean) => void }) {
   const router = useRouter()
   const [pending, startTransition] = useTransition()
+  const [confirmCancel, setConfirmCancel] = useState(false)
 
   if (!event) return null
 
@@ -41,6 +42,7 @@ export function EventDetailSheet({ event, open, onOpenChange }: { event: Calenda
         return
       }
       toast.success("Booking cancelled.")
+      setConfirmCancel(false)
       onOpenChange(false)
       router.refresh()
     })
@@ -146,30 +148,32 @@ export function EventDetailSheet({ event, open, onOpenChange }: { event: Calenda
             <Link href={`/dashboard/events/${event.id}/settings`}><Pencil className="size-3.5" /> Edit Event</Link>
           </Button>
           {!isCancelled && (
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button variant="outline" className="flex-1 text-destructive hover:text-destructive">
-                  <Ban className="size-3.5" /> Cancel Booking
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Cancel this booking?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    &ldquo;{event.name}&rdquo; will be removed from active confirmed bookings. It stays in your booking history and can be reopened later.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Keep booking</AlertDialogCancel>
-                  <AlertDialogAction onClick={cancelBooking} disabled={pending} className="bg-destructive text-white hover:bg-destructive/90">
-                    {pending ? "Cancelling..." : "Cancel booking"}
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
+            <Button variant="outline" className="flex-1 text-destructive hover:text-destructive" onClick={() => setConfirmCancel(true)}>
+              <Ban className="size-3.5" /> Cancel Booking
+            </Button>
           )}
         </SheetFooter>
       </SheetContent>
+
+      {/* Rendered as a sibling, not nested inside the Sheet's trigger button — nesting an
+          AlertDialogTrigger inside SheetContent causes Radix's dismiss-on-outside-click
+          logic to close the Sheet before the AlertDialog opens. Controlled `open` avoids it. */}
+      <AlertDialog open={confirmCancel} onOpenChange={setConfirmCancel}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancel this booking?</AlertDialogTitle>
+            <AlertDialogDescription>
+              &ldquo;{event.name}&rdquo; will be removed from active confirmed bookings. It stays in your booking history and can be reopened later.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep booking</AlertDialogCancel>
+            <AlertDialogAction onClick={cancelBooking} disabled={pending} className="bg-destructive text-white hover:bg-destructive/90">
+              {pending ? "Cancelling..." : "Cancel booking"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Sheet>
   )
 }
