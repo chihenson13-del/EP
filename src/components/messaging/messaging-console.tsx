@@ -72,13 +72,16 @@ export function MessagingConsole({ eventId, guests, logs, canSms, providersConfi
       const result = await sendMessage({
         eventId, channel, type, guestIds: Array.from(selected),
         subject: channel === "EMAIL" ? subject : undefined,
-        body, scheduledFor: scheduledFor || undefined,
+        // datetime-local is the user's local wall-clock time; send an absolute instant so the server doesn't read it as UTC.
+        body, scheduledFor: scheduledFor ? new Date(scheduledFor).toISOString() : undefined,
       })
       if (!result.ok) {
         toast.error(result.error)
         return
       }
-      if (result.data.mock) {
+      if (result.data.scheduled > 0) {
+        toast.success(`${result.data.scheduled} message(s) scheduled. Scheduled messages are delivered by a daily background job, so they go out on the scheduled day.${result.data.skipped ? ` ${result.data.skipped} skipped (missing contact info).` : ""}`)
+      } else if (result.data.mock) {
         toast.success(`${result.data.sent} message(s) processed in MOCK MODE — no real message was delivered.`)
       } else {
         toast.success(`${result.data.sent} sent, ${result.data.failed} failed, ${result.data.skipped} skipped (missing contact info).`)

@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache"
 import { db } from "@/lib/db"
 import { requireAdmin } from "@/lib/session"
+import { PLAN_RANK } from "@/lib/entitlements"
 import { sendEmail } from "@/lib/mailer"
 import { paymentStatusTemplate } from "@/lib/email-templates"
 import { grantEntitlementSchema, type GrantEntitlementInput } from "@/lib/validations/payment"
@@ -19,18 +20,27 @@ export async function approvePurchase(purchaseId: string): Promise<ActionResult>
   const purchase = await db.purchase.findUnique({ where: { id: purchaseId }, include: { plan: true, user: true } })
   if (!purchase) return { ok: false, error: "Purchase not found." }
   if (purchase.status === "APPROVED") return { ok: false, error: "Already approved." }
+  if (purchase.plan.scope === "EVENT" && !purchase.eventId) {
+    return { ok: false, error: "This purchase's event no longer exists, so it can't be approved. Reject it or grant access manually." }
+  }
 
-  await db.$transaction(async (tx) => {
-    await tx.purchase.update({
-      where: { id: purchaseId },
-      data: { status: "APPROVED", approvedAt: new Date(), approvedById: admin.id },
+  const approved = await db.$transaction(async (tx) => {
+    // Atomic status flip: if two admins click at once only one wins, so entitlements can't be doubled.
+    const flipped = await tx.purchase.updateMany({
+      where: { id: purchaseId, status: { not: "APPROVED" } },
+      data: { status: "APPROVED", approvedAt: new Date(), approvedById: admin.id, rejectedReason: null },
     })
+    if (flipped.count === 0) return false
 
     const existing = await tx.entitlement.findFirst({
       where: { userId: purchase.userId, eventId: purchase.eventId, scope: purchase.plan.scope, status: "ACTIVE" },
+      include: { plan: true },
     })
     if (existing) {
-      await tx.entitlement.update({ where: { id: existing.id }, data: { planId: purchase.planId, purchaseId: purchase.id, activatedAt: new Date() } })
+      // Never downgrade: approving an older/cheaper purchase must not replace a higher active plan.
+      if (PLAN_RANK[existing.plan.key] <= PLAN_RANK[purchase.plan.key]) {
+        await tx.entitlement.update({ where: { id: existing.id }, data: { planId: purchase.planId, purchaseId: purchase.id, activatedAt: new Date() } })
+      }
     } else {
       await tx.entitlement.create({
         data: {
@@ -42,7 +52,9 @@ export async function approvePurchase(purchaseId: string): Promise<ActionResult>
         },
       })
     }
+    return true
   })
+  if (!approved) return { ok: false, error: "Already approved." }
 
   await logActivity(admin.id, "PURCHASE_APPROVED", "Purchase", purchaseId, { amount: purchase.amount, plan: purchase.plan.key })
   await sendEmail({
@@ -104,6 +116,8 @@ export async function grantEntitlementManually(input: GrantEntitlementInput): Pr
 
 export async function revokeEntitlement(entitlementId: string, reason: string): Promise<ActionResult> {
   const admin = await requireAdmin()
+  const existing = await db.entitlement.findUnique({ where: { id: entitlementId }, select: { id: true } })
+  if (!existing) return { ok: false, error: "Entitlement not found." }
   await db.entitlement.update({ where: { id: entitlementId }, data: { status: "REVOKED", revokedAt: new Date() } })
   await logActivity(admin.id, "ENTITLEMENT_REVOKED", "Entitlement", entitlementId, { reason })
   revalidatePath("/admin")
@@ -113,6 +127,9 @@ export async function revokeEntitlement(entitlementId: string, reason: string): 
 
 export async function simulateTestPayment(userId: string, planKey: "PREMIUM" | "PRO" | "UNLIMITED", eventId: string | undefined, outcome: "PENDING" | "APPROVED" | "REJECTED" | "FAILED"): Promise<ActionResult> {
   const admin = await requireAdmin()
+  // Fake payments would count as real approved revenue and grant real entitlements, so this
+  // development-only tool is refused outright in production. Use "Manual grant" (with a reason) instead.
+  if (process.env.NODE_ENV === "production") return { ok: false, error: "Test payments are disabled in production." }
   const plan = await db.plan.findUniqueOrThrow({ where: { key: planKey } })
 
   const purchase = await db.purchase.create({

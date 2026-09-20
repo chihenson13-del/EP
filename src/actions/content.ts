@@ -5,6 +5,7 @@ import { db } from "@/lib/db"
 import { requireUser } from "@/lib/session"
 import { requireEventAccess } from "@/lib/event-access"
 import { getEventLimits, hasFeature, FEATURES } from "@/lib/entitlements"
+import { isSafeImageUrl, IMAGE_URL_ERROR } from "@/lib/image-url"
 import type { ActionResult } from "@/actions/events"
 import type { SectionType, Prisma } from "@prisma/client"
 
@@ -154,6 +155,8 @@ export async function deleteScheduleItem(eventId: string, id: string): Promise<A
 export async function addGalleryImage(eventId: string, url: string, caption?: string): Promise<ActionResult<{ id: string }>> {
   const user = await requireUser()
   await requireEventAccess(user.id, eventId).catch(() => { throw new Error("NO_ACCESS") })
+  if (!isSafeImageUrl(url)) return { ok: false, error: IMAGE_URL_ERROR }
+  if (caption && caption.length > 200) return { ok: false, error: "Caption is too long (200 characters max)." }
 
   const limits = await getEventLimits(user.id, eventId)
   if (limits.maxGalleryImages !== "unlimited") {

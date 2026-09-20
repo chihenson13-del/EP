@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { isSafeImageUrl, IMAGE_URL_ERROR, MAX_IMAGE_DATA_URL_LENGTH } from "@/lib/image-url"
 
 export const submitPurchaseSchema = z.object({
   planKey: z.enum(["PREMIUM", "PRO", "UNLIMITED"]),
@@ -7,7 +8,12 @@ export const submitPurchaseSchema = z.object({
   paymentMethod: z.string().trim().min(1, "Select a payment method").max(60),
   // proofImageUrl comes back from ImageUpload as a base64 data URL (no storage provider is
   // configured), so it must accommodate the largest file ImageUpload allows (5MB -> ~7M base64 chars).
-  proofImageUrl: z.string().trim().max(7_000_000).optional().or(z.literal("")),
+  proofImageUrl: z
+    .string()
+    .trim()
+    .max(MAX_IMAGE_DATA_URL_LENGTH)
+    .refine((v) => v === "" || isSafeImageUrl(v), IMAGE_URL_ERROR)
+    .optional(),
 })
 export type SubmitPurchaseInput = z.infer<typeof submitPurchaseSchema>
 

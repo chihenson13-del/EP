@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { useForm } from "react-hook-form"
+import { useForm, useWatch } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { toast } from "sonner"
 import { guestSchema, type GuestInput } from "@/lib/validations/guest"
@@ -38,6 +38,8 @@ export function GuestFormDialog({
     resolver: zodResolver(guestSchema),
     defaultValues: emptyValues(),
   })
+
+  const plusOneAllowed = useWatch({ control: form.control, name: "plusOneAllowed" })
 
   useEffect(() => {
     if (open) form.reset(guest ? toFormValues(guest) : emptyValues())
@@ -94,7 +96,7 @@ export function GuestFormDialog({
               )} />
             </div>
 
-            {form.watch("plusOneAllowed") && (
+            {plusOneAllowed && (
               <FormField control={form.control} name="maxPlusOnes" render={({ field }) => (
                 <FormItem>
                   <FormLabel>Max plus-ones</FormLabel>

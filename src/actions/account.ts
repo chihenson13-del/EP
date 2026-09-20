@@ -5,6 +5,7 @@ import bcrypt from "bcryptjs"
 import { db } from "@/lib/db"
 import { requireUser } from "@/lib/session"
 import { updateProfileSchema, changePasswordSchema } from "@/lib/validations/auth"
+import { isSafeImageUrl, IMAGE_URL_ERROR } from "@/lib/image-url"
 import type { ActionResult } from "@/actions/events"
 
 export async function updateProfile(input: { name: string; businessName?: string; brandColor?: string }): Promise<ActionResult> {
@@ -23,6 +24,7 @@ export async function updateProfile(input: { name: string; businessName?: string
 
 export async function updateBrandLogo(logoUrl: string): Promise<ActionResult> {
   const user = await requireUser()
+  if (logoUrl && !isSafeImageUrl(logoUrl)) return { ok: false, error: IMAGE_URL_ERROR }
   await db.user.update({ where: { id: user.id }, data: { brandLogoUrl: logoUrl } })
   revalidatePath("/dashboard/settings")
   return { ok: true, data: undefined }

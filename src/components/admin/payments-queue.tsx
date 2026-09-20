@@ -86,7 +86,9 @@ export function PaymentsQueue({
         </Select>
         <div className="flex-1" />
         <Button variant="outline" onClick={() => setGrantOpen(true)}><Gift className="size-4" /> Manual grant</Button>
-        <Button variant="outline" onClick={() => setTestOpen(true)}><FlaskConical className="size-4" /> Test payment mode</Button>
+        {process.env.NODE_ENV !== "production" && (
+          <Button variant="outline" onClick={() => setTestOpen(true)}><FlaskConical className="size-4" /> Test payment mode</Button>
+        )}
       </div>
 
       <div className="rounded-xl border bg-card overflow-x-auto">
@@ -159,7 +161,7 @@ export function PaymentsQueue({
       </Dialog>
 
       <GrantEntitlementDialog open={grantOpen} onOpenChange={setGrantOpen} users={users} events={events} />
-      <TestPaymentDialog open={testOpen} onOpenChange={setTestOpen} users={users} events={events} />
+      {process.env.NODE_ENV !== "production" && <TestPaymentDialog open={testOpen} onOpenChange={setTestOpen} users={users} events={events} />}
 
       <Dialog open={!!viewingProof} onOpenChange={(o) => !o && setViewingProof(null)}>
         <DialogContent className="max-w-lg">

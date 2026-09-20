@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache"
 import { db } from "@/lib/db"
 import { requireAdmin } from "@/lib/session"
+import { isSafeImageUrl, IMAGE_URL_ERROR } from "@/lib/image-url"
 import type { ActionResult } from "@/actions/events"
 
 export async function getPlatformSettings() {
@@ -16,6 +17,11 @@ export async function updatePlatformPaymentSettings(input: {
   paymentInstructions?: string
 }): Promise<ActionResult> {
   const admin = await requireAdmin()
+
+  if (input.paymentQrImageUrl && !isSafeImageUrl(input.paymentQrImageUrl)) return { ok: false, error: IMAGE_URL_ERROR }
+  if ((input.paymentAccountName?.length ?? 0) > 200 || (input.paymentAccountInfo?.length ?? 0) > 500 || (input.paymentInstructions?.length ?? 0) > 2000) {
+    return { ok: false, error: "One of the payment fields is too long." }
+  }
 
   await db.platformSettings.upsert({
     where: { id: "default" },

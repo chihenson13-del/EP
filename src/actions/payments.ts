@@ -21,7 +21,8 @@ export async function submitPurchase(input: SubmitPurchaseInput): Promise<Action
 
   if (d.planKey !== "UNLIMITED") {
     if (!d.eventId) return { ok: false, error: "Select an event for this plan." }
-    await requireEventAccess(user.id, d.eventId).catch(() => { throw new Error("NO_ACCESS") })
+    const hasAccess = await requireEventAccess(user.id, d.eventId).then(() => true).catch(() => false)
+    if (!hasAccess) return { ok: false, error: "You do not have access to this event." }
 
     const currentPlan = await getEffectivePlan(user.id, d.eventId)
     if (PLAN_RANK[currentPlan] >= PLAN_RANK[d.planKey]) {
@@ -38,6 +39,17 @@ export async function submitPurchase(input: SubmitPurchaseInput): Promise<Action
     })
     if (pendingExisting) return { ok: false, error: "You already have a pending Unlimited payment under review." }
   }
+
+  // A payment/transaction reference can only back one purchase — otherwise a single real
+  // payment could be reused to try to unlock several plans.
+  const duplicateReference = await db.purchase.findFirst({
+    where: {
+      paymentReference: { equals: d.paymentReference, mode: "insensitive" },
+      status: { in: ["PENDING", "SUBMITTED", "UNDER_REVIEW", "APPROVED"] },
+    },
+    select: { id: true },
+  })
+  if (duplicateReference) return { ok: false, error: "That payment reference has already been submitted. Check the reference number on your receipt." }
 
   const plan = await db.plan.findUniqueOrThrow({ where: { key: d.planKey } })
 
@@ -73,7 +85,10 @@ export async function listMyPurchases() {
   })
 }
 
-/** Self-heals: ensures every APPROVED purchase has a matching active entitlement. */
+/**
+ * Self-heals: ensures every APPROVED purchase has an entitlement row. A REVOKED entitlement is an
+ * explicit admin decision (e.g. refund) and is never reactivated here.
+ */
 export async function restorePurchases(): Promise<ActionResult<{ restored: number }>> {
   const user = await requireUser()
 
@@ -84,21 +99,18 @@ export async function restorePurchases(): Promise<ActionResult<{ restored: numbe
 
   let restored = 0
   for (const purchase of approved) {
-    if (purchase.entitlement && purchase.entitlement.status === "ACTIVE") continue
-    if (purchase.entitlement) {
-      await db.entitlement.update({ where: { id: purchase.entitlement.id }, data: { status: "ACTIVE" } })
-    } else {
-      await db.entitlement.create({
-        data: {
-          userId: user.id,
-          eventId: purchase.eventId,
-          planId: purchase.planId,
-          scope: purchase.plan.scope,
-          purchaseId: purchase.id,
-          activatedAt: purchase.approvedAt ?? new Date(),
-        },
-      })
-    }
+    if (purchase.entitlement) continue
+    if (purchase.plan.scope === "EVENT" && !purchase.eventId) continue
+    await db.entitlement.create({
+      data: {
+        userId: user.id,
+        eventId: purchase.eventId,
+        planId: purchase.planId,
+        scope: purchase.plan.scope,
+        purchaseId: purchase.id,
+        activatedAt: purchase.approvedAt ?? new Date(),
+      },
+    })
     restored++
   }
 

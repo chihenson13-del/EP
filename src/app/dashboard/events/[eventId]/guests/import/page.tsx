@@ -32,22 +32,36 @@ export default function ImportGuestsPage({ params }: { params: Promise<{ eventId
   const [result, setResult] = useState<{ imported: number; skipped: number } | null>(null)
 
   function handleFile(file: File) {
-    const isCsv = file.name.toLowerCase().endsWith(".csv")
-    if (isCsv) {
+    const name = file.name.toLowerCase()
+    if (!/\.(csv|xlsx|xls)$/.test(name)) {
+      toast.error("Please choose a .csv, .xlsx or .xls file.")
+      return
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("That file is too large. Please keep guest imports under 5MB.")
+      return
+    }
+    if (name.endsWith(".csv")) {
       Papa.parse<Record<string, string>>(file, {
         header: true,
         skipEmptyLines: true,
         complete: (res) => applyParsed(res.meta.fields ?? [], res.data),
+        error: () => toast.error("Couldn't read that CSV file."),
       })
     } else {
       const reader = new FileReader()
       reader.onload = (e) => {
-        const wb = XLSX.read(e.target?.result, { type: "binary" })
-        const sheet = wb.Sheets[wb.SheetNames[0]]
-        const json = XLSX.utils.sheet_to_json<Record<string, string>>(sheet, { defval: "" })
-        const fields = json.length ? Object.keys(json[0]) : []
-        applyParsed(fields, json)
+        try {
+          const wb = XLSX.read(e.target?.result, { type: "binary" })
+          const sheet = wb.Sheets[wb.SheetNames[0]]
+          const json = XLSX.utils.sheet_to_json<Record<string, string>>(sheet, { defval: "" })
+          const fields = json.length ? Object.keys(json[0]) : []
+          applyParsed(fields, json)
+        } catch {
+          toast.error("Couldn't read that spreadsheet. Save it as .xlsx or .csv and try again.")
+        }
       }
+      reader.onerror = () => toast.error("Couldn't read that file.")
       reader.readAsBinaryString(file)
     }
   }

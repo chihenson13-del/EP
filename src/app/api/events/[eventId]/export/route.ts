@@ -2,10 +2,9 @@ import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { getCurrentUser } from "@/lib/session"
 import { getEventAccessRole } from "@/lib/event-access"
+import { toCsv } from "@/lib/csv"
 
-function csv(rows: (string | number)[][]): string {
-  return rows.map((r) => r.map((v) => (/[",\n]/.test(String(v)) ? `"${String(v).replace(/"/g, '""')}"` : String(v))).join(",")).join("\n")
-}
+const csv = toCsv
 
 export async function GET(req: Request, { params }: { params: Promise<{ eventId: string }> }) {
   const user = await getCurrentUser()

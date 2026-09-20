@@ -27,12 +27,18 @@ export async function submitRsvp(input: RsvpSubmitInput): Promise<ActionResult<{
     return { ok: false, error: "This event is no longer accepting RSVPs." }
   }
 
-  if (d.rsvpStatus === "ATTENDING" && guest.plusOneAllowed) {
-    const requested = d.plusOneNames?.length ?? 0
-    if (requested > guest.maxPlusOnes) {
+  const plusOneNames = (d.plusOneNames ?? []).map((n) => n.trim()).filter(Boolean)
+  if (d.rsvpStatus === "ATTENDING" && plusOneNames.length > 0) {
+    if (!guest.plusOneAllowed) return { ok: false, error: "This invitation doesn't include a plus-one." }
+    if (plusOneNames.length > guest.maxPlusOnes) {
       return { ok: false, error: `This invitation allows up to ${guest.maxPlusOnes} plus-one(s).` }
     }
   }
+  // Headcount is bounded by what this specific invitation allows — never trust the submitted number.
+  const maxAttending = 1 + (guest.plusOneAllowed ? guest.maxPlusOnes : 0)
+  const numberAttending = d.rsvpStatus === "ATTENDING" ? Math.min(d.numberAttending ?? 1 + plusOneNames.length, maxAttending) : 0
+  // Only answers to THIS event's own questions are stored (blocks writing answers onto another event's questions).
+  const validQuestionIds = new Set(event.customQuestions.map((q) => q.id))
 
   for (const q of event.customQuestions) {
     if (q.required && d.rsvpStatus === "ATTENDING") {
@@ -48,7 +54,7 @@ export async function submitRsvp(input: RsvpSubmitInput): Promise<ActionResult<{
       where: { id: guest.id },
       data: {
         rsvpStatus: d.rsvpStatus,
-        numberAttending: d.rsvpStatus === "ATTENDING" ? (d.numberAttending ?? 1 + (d.plusOneNames?.length ?? 0)) : 0,
+        numberAttending,
         mealPreference: d.mealPreference || guest.mealPreference,
         dietaryRestrictions: d.dietaryRestrictions || guest.dietaryRestrictions,
         respondedAt: new Date(),
@@ -56,14 +62,15 @@ export async function submitRsvp(input: RsvpSubmitInput): Promise<ActionResult<{
     })
 
     await tx.plusOne.deleteMany({ where: { guestId: guest.id } })
-    if (d.rsvpStatus === "ATTENDING" && d.plusOneNames?.length) {
+    if (d.rsvpStatus === "ATTENDING" && plusOneNames.length) {
       await tx.plusOne.createMany({
-        data: d.plusOneNames.filter((n) => n.trim()).map((name) => ({ guestId: guest.id, name })),
+        data: plusOneNames.map((name) => ({ guestId: guest.id, name })),
       })
     }
 
     if (d.answers) {
       for (const [questionId, value] of Object.entries(d.answers)) {
+        if (!validQuestionIds.has(questionId)) continue
         await tx.customAnswer.upsert({
           where: { guestId_questionId: { guestId: guest.id, questionId } },
           update: { value: value as never },

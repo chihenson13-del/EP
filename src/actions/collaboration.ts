@@ -5,6 +5,7 @@ import { db } from "@/lib/db"
 import { requireUser } from "@/lib/session"
 import { hasFeature, FEATURES } from "@/lib/entitlements"
 import { sendEmail } from "@/lib/mailer"
+import { escapeHtml } from "@/lib/email-templates"
 import type { ActionResult } from "@/actions/events"
 import type { CollaboratorRole } from "@prisma/client"
 
@@ -16,7 +17,9 @@ async function requireOwner(userId: string, eventId: string) {
 
 export async function inviteCollaborator(eventId: string, email: string, role: CollaboratorRole): Promise<ActionResult<{ id: string }>> {
   const user = await requireUser()
-  const event = await requireOwner(user.id, eventId).catch((e) => { throw e })
+  const event = await requireOwner(user.id, eventId).catch(() => null)
+  if (!event) return { ok: false, error: "Only the event owner can manage collaborators." }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254) return { ok: false, error: "Enter a valid email address." }
 
   const allowed = await hasFeature(user.id, eventId, FEATURES.CLIENT_COLLABORATION)
   if (!allowed) return { ok: false, error: "Client collaboration requires Pro or Unlimited." }
@@ -32,7 +35,7 @@ export async function inviteCollaborator(eventId: string, email: string, role: C
   await sendEmail({
     to: email,
     subject: `You've been invited to collaborate on ${event.name}`,
-    html: `<p>You've been given <strong>${role}</strong> access to <strong>${event.name}</strong> on Events Partner.</p><p><a href="${process.env.NEXT_PUBLIC_APP_URL}/${invitee ? "dashboard" : "register"}">Open Events Partner</a></p>`,
+    html: `<p>You've been given <strong>${escapeHtml(role)}</strong> access to <strong>${escapeHtml(event.name)}</strong> on Events Partner.</p><p><a href="${escapeHtml(`${process.env.NEXT_PUBLIC_APP_URL}/${invitee ? "dashboard" : "register"}`)}">Open Events Partner</a></p>`,
   })
 
   revalidatePath(`/dashboard/events/${eventId}/settings/team`)

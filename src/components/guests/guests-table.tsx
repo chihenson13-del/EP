@@ -13,6 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { GuestFormDialog } from "@/components/guests/guest-form-dialog"
 import { bulkDeleteGuests, bulkSetRsvpStatus, deleteGuest } from "@/actions/guests"
+import { toCsv } from "@/lib/csv"
 
 type Guest = {
   id: string
@@ -77,7 +78,7 @@ export function GuestsTable({ eventId, eventSlug, guests }: { eventId: string; e
       g.firstName, g.lastName ?? "", g.email ?? "", g.phone ?? "", g.category ?? "",
       g.rsvpStatus, g.chair?.table.name ?? "", g.chair?.seatNumber ?? "", g.checkedIn ? "Yes" : "No",
     ])
-    const csv = [header, ...rows].map((r) => r.map(escapeCsv).join(",")).join("\n")
+    const csv = toCsv([header, ...rows])
     downloadFile(csv, `guests-${eventSlug}.csv`, "text/csv")
   }
 
@@ -207,11 +208,6 @@ export function GuestsTable({ eventId, eventSlug, guests }: { eventId: string; e
       <GuestFormDialog eventId={eventId} open={dialogOpen} onOpenChange={setDialogOpen} guest={editing} />
     </div>
   )
-}
-
-function escapeCsv(value: string | number): string {
-  const s = String(value)
-  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
 }
 
 function downloadFile(content: string, filename: string, type: string) {

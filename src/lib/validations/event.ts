@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { isHttpUrl } from "@/lib/image-url"
 
 export const eventTypeValues = [
   "BIRTHDAY", "KIDS_PARTY", "WEDDING", "DEBUT", "BAPTISM", "GRADUATION",
@@ -28,7 +29,12 @@ export const updateEventSchema = z.object({
   timezone: z.string().trim().max(60).optional().or(z.literal("")),
   venueName: z.string().trim().max(160).optional().or(z.literal("")),
   address: z.string().trim().max(240).optional().or(z.literal("")),
-  mapUrl: z.string().trim().max(500).optional().or(z.literal("")),
+  mapUrl: z
+    .string()
+    .trim()
+    .max(500)
+    .refine((v) => v === "" || isHttpUrl(v), "Map link must be a full http:// or https:// URL")
+    .optional(),
   description: z.string().trim().max(4000).optional().or(z.literal("")),
   rsvpDeadline: z.string().optional().or(z.literal("")),
   allowLateRsvp: z.boolean().optional(),

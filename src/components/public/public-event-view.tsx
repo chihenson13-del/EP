@@ -3,6 +3,7 @@
 import { useMemo } from "react"
 import { Countdown } from "@/components/public/countdown"
 import { googleCalendarUrl, outlookCalendarUrl, icsFileContent } from "@/lib/calendar-links"
+import { safeHttpUrl } from "@/lib/image-url"
 import { Button } from "@/components/ui/button"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
 import type { ResolvedTheme } from "@/lib/theme-resolve"
@@ -107,9 +108,9 @@ function SectionRenderer({
             <p className="flex items-center justify-center gap-1.5 font-medium"><MapPin className="size-4" /> {event.venueName}</p>
             {event.address && <p className="opacity-70 text-sm">{event.address}</p>}
             <div className="flex flex-wrap justify-center gap-2 pt-2">
-              {event.mapUrl && (
+              {safeHttpUrl(event.mapUrl) && (
                 <Button variant="outline" size="sm" asChild>
-                  <a href={event.mapUrl} target="_blank" rel="noreferrer">Get directions <ExternalLink className="size-3.5" /></a>
+                  <a href={safeHttpUrl(event.mapUrl)!} target="_blank" rel="noreferrer">Get directions <ExternalLink className="size-3.5" /></a>
                 </Button>
               )}
               {calendarLinks && (
