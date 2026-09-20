@@ -1,5 +1,6 @@
 "use client"
 
+import { memo } from "react"
 import { TABLE_SHAPE_DEFAULTS } from "@/lib/seating"
 import type { TableData } from "./types"
 
@@ -11,15 +12,15 @@ const SEAT_STATUS_COLOR: Record<string, string> = {
   RESERVED: "#d8a7b8",
 }
 
-export function TableNode({
+export const TableNode = memo(function TableNode({
   table, selected, selectedChairId, onTablePointerDown, onChairPointerDown, onGuestDrop,
 }: {
   table: TableData
   selected: boolean
   selectedChairId: string | null
-  onTablePointerDown: (e: React.PointerEvent) => void
-  onChairPointerDown: (chairId: string, e: React.PointerEvent) => void
-  onGuestDrop: (chairId: string, guestId: string) => void
+  onTablePointerDown: (table: TableData, e: React.PointerEvent) => void
+  onChairPointerDown: (table: TableData, chairId: string, e: React.PointerEvent) => void
+  onGuestDrop: (tableId: string, chairId: string, guestId: string) => void
 }) {
   const kind = TABLE_SHAPE_DEFAULTS[table.shape].kind
   const isRound = kind === "round"
@@ -33,7 +34,7 @@ export function TableNode({
           fill={table.color}
           stroke={selected ? "var(--brand-purple-deep)" : table.borderColor}
           strokeWidth={selected ? table.borderWidth + 1.5 : table.borderWidth}
-          onPointerDown={(e) => { e.stopPropagation(); onTablePointerDown(e) }}
+          onPointerDown={(e) => { e.stopPropagation(); onTablePointerDown(table, e) }}
           className="cursor-move"
         />
       ) : isOval ? (
@@ -42,7 +43,7 @@ export function TableNode({
           fill={table.color}
           stroke={selected ? "var(--brand-purple-deep)" : table.borderColor}
           strokeWidth={selected ? table.borderWidth + 1.5 : table.borderWidth}
-          onPointerDown={(e) => { e.stopPropagation(); onTablePointerDown(e) }}
+          onPointerDown={(e) => { e.stopPropagation(); onTablePointerDown(table, e) }}
           className="cursor-move"
         />
       ) : (
@@ -51,7 +52,7 @@ export function TableNode({
           fill={table.color}
           stroke={selected ? "var(--brand-purple-deep)" : table.borderColor}
           strokeWidth={selected ? table.borderWidth + 1.5 : table.borderWidth}
-          onPointerDown={(e) => { e.stopPropagation(); onTablePointerDown(e) }}
+          onPointerDown={(e) => { e.stopPropagation(); onTablePointerDown(table, e) }}
           className="cursor-move"
         />
       )}
@@ -65,12 +66,12 @@ export function TableNode({
         <g
           key={chair.id}
           transform={`translate(${chair.x} ${chair.y}) rotate(${-table.rotation})`}
-          onPointerDown={(e) => { e.stopPropagation(); onChairPointerDown(chair.id, e) }}
+          onPointerDown={(e) => { e.stopPropagation(); onChairPointerDown(table, chair.id, e) }}
           onDragOver={(e) => e.preventDefault()}
           onDrop={(e) => {
             e.preventDefault()
             const guestId = e.dataTransfer.getData("text/guest-id")
-            if (guestId) onGuestDrop(chair.id, guestId)
+            if (guestId) onGuestDrop(table.id, chair.id, guestId)
           }}
           className="cursor-pointer"
         >
@@ -87,4 +88,4 @@ export function TableNode({
       ))}
     </g>
   )
-}
+})

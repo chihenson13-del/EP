@@ -7,6 +7,46 @@ import { Button } from "@/components/ui/button"
 import { ALLOWED_IMAGE_MIME } from "@/lib/image-url"
 
 const MAX_BYTES = 5 * 1024 * 1024
+/** Photos larger than this are downscaled and re-encoded in the browser before upload (typically 5MB -> ~300KB). */
+const COMPRESS_ABOVE_BYTES = 350 * 1024
+const MAX_DIMENSION = 1600
+
+function readAsDataUrl(file: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(reader.result as string)
+    reader.onerror = () => reject(new Error("read failed"))
+    reader.readAsDataURL(file)
+  })
+}
+
+/**
+ * Shrinks a large photo so uploads are fast and pages stay light. Falls back to the untouched original if the
+ * browser can't decode/encode it or the result isn't smaller. Animated GIFs are never re-encoded.
+ */
+async function prepareImage(file: File, compress: boolean): Promise<string> {
+  const original = () => readAsDataUrl(file)
+  if (!compress || file.type === "image/gif" || file.size <= COMPRESS_ABOVE_BYTES) return original()
+  try {
+    const bitmap = await createImageBitmap(file)
+    const scale = Math.min(1, MAX_DIMENSION / Math.max(bitmap.width, bitmap.height))
+    const canvas = document.createElement("canvas")
+    canvas.width = Math.max(1, Math.round(bitmap.width * scale))
+    canvas.height = Math.max(1, Math.round(bitmap.height * scale))
+    const ctx = canvas.getContext("2d")
+    if (!ctx) return original()
+    ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height)
+    bitmap.close()
+    // JPEG stays JPEG; PNG/WebP become WebP so transparency survives.
+    const wanted = file.type === "image/jpeg" ? "image/jpeg" : "image/webp"
+    const encoded = canvas.toDataURL(wanted, 0.85)
+    const originalUrl = await original()
+    if (!encoded.startsWith(`data:${wanted}`) || encoded.length >= originalUrl.length) return originalUrl
+    return encoded
+  } catch {
+    return original()
+  }
+}
 
 /**
  * Client-side image upload: reads the file as a data URL and hands it to onUploaded.
@@ -14,7 +54,7 @@ const MAX_BYTES = 5 * 1024 * 1024
  * and call onUploaded with the resulting CDN URL — everything downstream just expects a URL string.
  * The server re-validates every URL (see isSafeImageUrl), so this check is only for fast feedback.
  */
-export function ImageUpload({ onUploaded, label = "Upload image" }: { onUploaded: (dataUrl: string) => void; label?: string }) {
+export function ImageUpload({ onUploaded, label = "Upload image", compress = true }: { onUploaded: (dataUrl: string) => void; label?: string; compress?: boolean }) {
   const inputRef = useRef<HTMLInputElement>(null)
   const [loading, setLoading] = useState(false)
 
@@ -28,16 +68,10 @@ export function ImageUpload({ onUploaded, label = "Upload image" }: { onUploaded
       return
     }
     setLoading(true)
-    const reader = new FileReader()
-    reader.onload = () => {
-      onUploaded(reader.result as string)
-      setLoading(false)
-    }
-    reader.onerror = () => {
-      setLoading(false)
-      toast.error("Couldn't read that file. Please try another image.")
-    }
-    reader.readAsDataURL(file)
+    prepareImage(file, compress)
+      .then((dataUrl) => onUploaded(dataUrl))
+      .catch(() => toast.error("Couldn't read that file. Please try another image."))
+      .finally(() => setLoading(false))
   }
 
   return (

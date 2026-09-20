@@ -1,5 +1,6 @@
 "use client"
 
+import { formatDate, calendarDayOf } from "@/lib/timezone"
 import { useState, useTransition } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
@@ -23,6 +24,7 @@ import { PLAN_PRICING } from "@/lib/entitlements"
 import { BOOKING_STATUS_LABEL, BOOKING_STATUS_STYLE, getBookingStatus } from "@/lib/booking-calendar"
 import type { CalendarEvent } from "./types"
 
+import { safe } from "@/lib/safe-action"
 export function EventDetailSheet({ event, open, onOpenChange }: { event: CalendarEvent | null; open: boolean; onOpenChange: (open: boolean) => void }) {
   const router = useRouter()
   const [pending, startTransition] = useTransition()
@@ -36,7 +38,7 @@ export function EventDetailSheet({ event, open, onOpenChange }: { event: Calenda
 
   function cancelBooking() {
     startTransition(async () => {
-      const result = await setEventStatus(event!.id, "ARCHIVED")
+      const result = await safe(setEventStatus(event!.id, "ARCHIVED"))
       if (!result.ok) {
         toast.error(result.error)
         return
@@ -57,14 +59,14 @@ export function EventDetailSheet({ event, open, onOpenChange }: { event: Calenda
             <Badge variant="secondary" className="font-normal">{typeConfig.emoji} {event.customTypeLabel || typeConfig.label}</Badge>
           </div>
           <SheetTitle className="font-heading text-2xl">{event.name}</SheetTitle>
-          <SheetDescription>Created {format(new Date(event.createdAt), "MMM d, yyyy")}</SheetDescription>
+          <SheetDescription>Created {formatDate(event.createdAt, { month: "short", day: "numeric", year: "numeric" })}</SheetDescription>
         </SheetHeader>
 
         <div className="px-4 sm:px-6 space-y-4 pb-4">
           <div className="space-y-2.5 text-sm">
             <div className="flex items-center gap-2.5">
               <CalendarDays className="size-4 text-muted-foreground shrink-0" />
-              <span>{event.date ? format(new Date(event.date), "EEEE, MMMM d, yyyy") : "No date set"}</span>
+              <span>{event.date ? format(calendarDayOf(event.date), "EEEE, MMMM d, yyyy") : "No date set"}</span>
             </div>
             {event.timeLabel && (
               <div className="flex items-center gap-2.5">

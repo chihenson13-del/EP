@@ -24,6 +24,7 @@ export async function GET(req: Request) {
   if (!isAuthorized(req.headers.get("authorization"), secret)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
   const due = await db.messageLog.findMany({
+    relationLoadStrategy: "join",
     where: { status: "SCHEDULED", scheduledFor: { lte: new Date() } },
     include: { guest: { select: { email: true, phone: true } }, event: { select: { name: true, status: true } } },
     orderBy: { scheduledFor: "asc" },

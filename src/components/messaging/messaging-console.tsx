@@ -1,5 +1,6 @@
 "use client"
 
+import { singaporeLocalToInstant, formatDateTime } from "@/lib/timezone"
 import { useMemo, useState, useTransition } from "react"
 import { toast } from "sonner"
 import { Send, Info } from "lucide-react"
@@ -16,6 +17,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { UpgradeModal } from "@/components/payments/upgrade-modal"
 
+import { safe } from "@/lib/safe-action"
+import { useSingleFlight } from "@/lib/use-single-flight"
 type Guest = { id: string; firstName: string; lastName: string | null; email: string | null; phone: string | null; rsvpStatus: string }
 type Log = { id: string; channel: "EMAIL" | "SMS"; type: string; status: string; isMock: boolean; createdAt: string; guest: { firstName: string; lastName: string | null } | null }
 
@@ -39,6 +42,7 @@ export function MessagingConsole({ eventId, guests, logs, canSms, providersConfi
 
   const eligibleGuests = useMemo(() => guests.filter((g) => (channel === "EMAIL" ? g.email : g.phone)), [guests, channel])
 
+  const once = useSingleFlight()
   function toggleAll(checked: boolean) {
     setSelected(checked ? new Set(eligibleGuests.map((g) => g.id)) : new Set())
   }
@@ -69,12 +73,13 @@ export function MessagingConsole({ eventId, guests, logs, canSms, providersConfi
         return
       }
     startTransition(async () => {
-      const result = await sendMessage({
+      await once(async () => {
+      const result = await safe(sendMessage({
         eventId, channel, type, guestIds: Array.from(selected),
         subject: channel === "EMAIL" ? subject : undefined,
         // datetime-local is the user's local wall-clock time; send an absolute instant so the server doesn't read it as UTC.
-        body, scheduledFor: scheduledFor ? new Date(scheduledFor).toISOString() : undefined,
-      })
+        body, scheduledFor: scheduledFor ? singaporeLocalToInstant(scheduledFor).toISOString() : undefined,
+      }))
       if (!result.ok) {
         toast.error(result.error)
         return
@@ -87,6 +92,7 @@ export function MessagingConsole({ eventId, guests, logs, canSms, providersConfi
         toast.success(`${result.data.sent} sent, ${result.data.failed} failed, ${result.data.skipped} skipped (missing contact info).`)
       }
       setSelected(new Set())
+    })
     })
   }
 
@@ -145,7 +151,7 @@ export function MessagingConsole({ eventId, guests, logs, canSms, providersConfi
                       <TableCell>
                         <Badge variant={l.status === "FAILED" ? "destructive" : "secondary"}>{l.status}{l.isMock ? " (mock)" : ""}</Badge>
                       </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">{new Date(l.createdAt).toLocaleString()}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground">{formatDateTime(l.createdAt)}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>

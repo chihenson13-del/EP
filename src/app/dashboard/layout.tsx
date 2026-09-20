@@ -2,6 +2,7 @@ import Link from "next/link"
 import { requireUser } from "@/lib/session"
 import { UserMenu } from "@/components/dashboard/user-menu"
 import { Logo } from "@/components/brand/logo"
+import { LinkPending } from "@/components/shared/link-pending"
 
 export const dynamic = "force-dynamic"
 
@@ -18,23 +19,28 @@ export default async function DashboardLayout({ children }: { children: React.Re
           <nav className="hidden md:flex items-center gap-1 text-sm">
             <Link href="/dashboard" className="px-3 py-2 rounded-md hover:bg-secondary font-medium transition-colors">
               My Events
+              <LinkPending className="ml-1.5 inline" />
             </Link>
             <Link href="/dashboard/calendar" className="px-3 py-2 rounded-md hover:bg-secondary font-medium transition-colors">
               Booking Calendar
+              <LinkPending className="ml-1.5 inline" />
             </Link>
             <Link href="/dashboard/purchases" className="px-3 py-2 rounded-md hover:bg-secondary font-medium transition-colors">
               Purchases
+              <LinkPending className="ml-1.5 inline" />
             </Link>
             <Link href="/dashboard/settings" className="px-3 py-2 rounded-md hover:bg-secondary font-medium transition-colors">
               Settings
+              <LinkPending className="ml-1.5 inline" />
             </Link>
             {user.role === "ADMIN" && (
               <Link href="/admin" className="px-3 py-2 rounded-md hover:bg-secondary font-medium text-primary transition-colors">
                 Admin
+              <LinkPending className="ml-1.5 inline" />
               </Link>
             )}
           </nav>
-          <UserMenu user={{ name: user.name ?? "", email: user.email ?? "", image: user.image ?? null }} />
+          <UserMenu user={{ name: user.name ?? "", email: user.email ?? "", image: user.image ?? null, role: user.role }} />
         </div>
       </header>
       <main className="flex-1">{children}</main>

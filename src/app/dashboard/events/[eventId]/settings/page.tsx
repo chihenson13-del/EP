@@ -1,13 +1,9 @@
-import { notFound } from "next/navigation"
-import { requireUser } from "@/lib/session"
-import { db } from "@/lib/db"
+import { getEventContext } from "@/lib/event-access"
 import { EventSettingsForm } from "@/components/events/event-settings-form"
 
 export default async function EventSettingsPage({ params }: { params: Promise<{ eventId: string }> }) {
-  await requireUser()
   const { eventId } = await params
-  const event = await db.event.findUnique({ where: { id: eventId } })
-  if (!event) notFound()
+  const { event } = await getEventContext(eventId)
 
   return (
     <div className="space-y-6 max-w-2xl">

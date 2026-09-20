@@ -57,15 +57,15 @@ export async function deleteSection(eventId: string, sectionId: string): Promise
   return { ok: true, data: undefined }
 }
 
-export async function duplicateSection(eventId: string, sectionId: string): Promise<ActionResult> {
+export async function duplicateSection(eventId: string, sectionId: string): Promise<ActionResult<{ id: string; order: number }>> {
   const user = await requireUser()
   await requireEventAccess(user.id, eventId).catch(() => { throw new Error("NO_ACCESS") })
   const source = await db.eventSection.findFirst({ where: { id: sectionId, eventId } })
   if (!source) return { ok: false, error: "Section not found." }
   const count = await db.eventSection.count({ where: { eventId } })
-  await db.eventSection.create({ data: { eventId, type: source.type, order: count, visible: source.visible, content: source.content ?? {} } })
+  const created = await db.eventSection.create({ data: { eventId, type: source.type, order: count, visible: source.visible, content: source.content ?? {} }, select: { id: true, order: true } })
   revalidatePath(`/dashboard/events/${eventId}/website`)
-  return { ok: true, data: undefined }
+  return { ok: true, data: created }
 }
 
 // ── Theme ────────────────────────────────────────────────────────────────

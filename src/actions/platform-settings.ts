@@ -6,10 +6,6 @@ import { requireAdmin } from "@/lib/session"
 import { isSafeImageUrl, IMAGE_URL_ERROR } from "@/lib/image-url"
 import type { ActionResult } from "@/actions/events"
 
-export async function getPlatformSettings() {
-  return db.platformSettings.findUnique({ where: { id: "default" } })
-}
-
 export async function updatePlatformPaymentSettings(input: {
   paymentQrImageUrl?: string
   paymentAccountName?: string

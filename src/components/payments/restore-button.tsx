@@ -7,13 +7,14 @@ import { RefreshCw } from "lucide-react"
 import { restorePurchases } from "@/actions/payments"
 import { Button } from "@/components/ui/button"
 
+import { safe } from "@/lib/safe-action"
 export function RestoreButton() {
   const [pending, startTransition] = useTransition()
   const router = useRouter()
 
   function handleRestore() {
     startTransition(async () => {
-      const result = await restorePurchases()
+      const result = await safe(restorePurchases())
       if (!result.ok) {
         toast.error(result.error)
         return

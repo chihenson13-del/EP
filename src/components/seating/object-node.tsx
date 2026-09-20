@@ -1,11 +1,12 @@
 "use client"
 
+import { memo } from "react"
 import { FLOOR_OBJECT_LABELS } from "@/lib/seating"
 import type { FloorObjectData } from "./types"
 
-export function ObjectNode({ object, selected, onPointerDown }: { object: FloorObjectData; selected: boolean; onPointerDown: (e: React.PointerEvent) => void }) {
+export const ObjectNode = memo(function ObjectNode({ object, selected, onPointerDown }: { object: FloorObjectData; selected: boolean; onPointerDown: (object: FloorObjectData, e: React.PointerEvent) => void }) {
   return (
-    <g transform={`translate(${object.x} ${object.y}) rotate(${object.rotation})`} onPointerDown={(e) => { e.stopPropagation(); onPointerDown(e) }} className="cursor-move">
+    <g transform={`translate(${object.x} ${object.y}) rotate(${object.rotation})`} onPointerDown={(e) => { e.stopPropagation(); onPointerDown(object, e) }} className="cursor-move">
       <rect
         x={-object.width / 2} y={-object.height / 2} width={object.width} height={object.height} rx={8}
         fill={object.color}
@@ -18,4 +19,4 @@ export function ObjectNode({ object, selected, onPointerDown }: { object: FloorO
       </text>
     </g>
   )
-}
+})

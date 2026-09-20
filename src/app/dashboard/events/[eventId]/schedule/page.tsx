@@ -1,13 +1,10 @@
-import { notFound } from "next/navigation"
-import { requireUser } from "@/lib/session"
+import { getEventContext } from "@/lib/event-access"
 import { db } from "@/lib/db"
 import { ScheduleManager } from "@/components/content/schedule-manager"
 
 export default async function SchedulePage({ params }: { params: Promise<{ eventId: string }> }) {
-  await requireUser()
   const { eventId } = await params
-  const event = await db.event.findUnique({ where: { id: eventId }, select: { id: true } })
-  if (!event) notFound()
+  await getEventContext(eventId)
 
   const items = await db.scheduleItem.findMany({ where: { eventId }, orderBy: { order: "asc" } })
 

@@ -1,3 +1,4 @@
+import { formatDate } from "@/lib/timezone"
 import Link from "next/link"
 import { requireUser } from "@/lib/session"
 import { listMyPurchases } from "@/actions/payments"
@@ -51,7 +52,7 @@ export default async function PurchasesPage() {
             )}
             {purchases.map((p) => (
               <TableRow key={p.id}>
-                <TableCell className="text-sm">{new Date(p.createdAt).toLocaleDateString()}</TableCell>
+                <TableCell className="text-sm">{formatDate(p.createdAt)}</TableCell>
                 <TableCell className="font-medium">{p.plan.name}</TableCell>
                 <TableCell className="text-sm text-muted-foreground">{p.event?.name ?? "Account-wide"}</TableCell>
                 <TableCell className="text-sm">{formatPHP(p.amount)}</TableCell>
@@ -62,7 +63,7 @@ export default async function PurchasesPage() {
                     <p className="text-xs text-destructive mt-1 max-w-[200px]">{p.rejectedReason}</p>
                   )}
                 </TableCell>
-                <TableCell className="text-sm text-muted-foreground">{p.approvedAt ? new Date(p.approvedAt).toLocaleDateString() : "—"}</TableCell>
+                <TableCell className="text-sm text-muted-foreground">{p.approvedAt ? formatDate(p.approvedAt) : "—"}</TableCell>
                 <TableCell>
                   {p.status === "REJECTED" && (
                     <Button size="sm" variant="outline" asChild>

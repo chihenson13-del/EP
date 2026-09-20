@@ -12,6 +12,7 @@ import { Switch } from "@/components/ui/switch"
 import { Slider } from "@/components/ui/slider"
 import { Card, CardContent } from "@/components/ui/card"
 
+import { safe } from "@/lib/safe-action"
 type MusicEvent = {
   id: string
   musicEnabled: boolean
@@ -47,7 +48,7 @@ export function MusicSettingsForm({ event }: { event: MusicEvent }) {
       return
     }
     setSaving(true)
-    const result = await updateEventMusic({
+    const result = await safe(updateEventMusic({
       eventId: event.id,
       musicEnabled: enabled,
       youtubeUrl,
@@ -58,7 +59,7 @@ export function MusicSettingsForm({ event }: { event: MusicEvent }) {
       volume,
       showControl,
       showPlayer,
-    })
+    }))
     setSaving(false)
     if (!result.ok) {
       toast.error(result.error)

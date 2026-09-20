@@ -9,34 +9,36 @@ import { getBookingStatus, currentTimestamp } from "@/lib/booking-calendar"
 export default async function DashboardPage() {
   const user = await requireUser()
 
-  const [ownedEvents, collaboratorLinks, unlimited] = await Promise.all([
-    db.event.findMany({
-      where: { ownerId: user.id },
-      include: {
-        _count: { select: { guests: true } },
-        entitlements: { where: { status: "ACTIVE" }, include: { plan: true }, orderBy: { activatedAt: "desc" }, take: 1 },
-      },
-      orderBy: { createdAt: "desc" },
-    }),
+  // Only the columns the event cards and calendar card actually show — not whole event rows.
+  const cardSelect = {
+    id: true,
+    name: true,
+    slug: true,
+    type: true,
+    status: true,
+    date: true,
+    timeLabel: true,
+    venueName: true,
+    _count: { select: { guests: true } },
+    entitlements: { where: { status: "ACTIVE" as const }, select: { plan: { select: { key: true } } }, orderBy: { activatedAt: "desc" as const }, take: 1 },
+  }
+
+  const [ownedEvents, collaboratorLinks, unlimited, attendingCounts] = await Promise.all([
+    db.event.findMany({ where: { ownerId: user.id }, select: cardSelect, orderBy: { createdAt: "desc" } }),
     db.eventCollaborator.findMany({
+      relationLoadStrategy: "join",
       where: { userId: user.id, status: "ACTIVE" },
-      include: {
-        event: {
-          include: {
-            _count: { select: { guests: true } },
-            entitlements: { where: { status: "ACTIVE" }, include: { plan: true }, orderBy: { activatedAt: "desc" }, take: 1 },
-          },
-        },
-      },
+      select: { role: true, event: { select: cardSelect } },
     }),
     hasUnlimitedAccount(user.id),
+    // Guests attending, per event, in one grouped query (joins through the event so it can run in parallel).
+    db.guest.groupBy({
+      by: ["eventId"],
+      where: { rsvpStatus: "ATTENDING", event: { ownerId: user.id } },
+      _count: { _all: true },
+    }),
   ])
 
-  const attendingCounts = await db.guest.groupBy({
-    by: ["eventId"],
-    where: { eventId: { in: ownedEvents.map((e) => e.id) }, rsvpStatus: "ATTENDING" },
-    _count: { _all: true },
-  })
   const attendingMap = new Map(attendingCounts.map((a) => [a.eventId, a._count._all]))
 
   const events = ownedEvents.map((e) => ({

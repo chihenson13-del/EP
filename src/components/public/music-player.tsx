@@ -10,6 +10,8 @@ declare global {
         el: HTMLElement | string,
         opts: {
           videoId: string
+          width?: string | number
+          height?: string | number
           playerVars?: Record<string, string | number>
           events?: {
             onReady?: (e: { target: YTPlayer }) => void
@@ -72,17 +74,29 @@ export function MusicPlayer({ config }: { config: MusicConfig }) {
   const [muted, setMuted] = useState(config.startMuted)
   const [needsGesture, setNeedsGesture] = useState(config.autoplay)
   const [error, setError] = useState(false)
+  // The YouTube player (a heavy third-party embed) is only created when it's actually needed: right away
+  // when autoplay or a visible player was requested, otherwise on the guest's first tap on the control.
+  const [activated, setActivated] = useState(config.autoplay || config.showPlayer)
+  const playOnReady = useRef(false)
 
   useEffect(() => {
+    if (!activated) return
     let cancelled = false
     let checkTimer: ReturnType<typeof setTimeout> | null = null
+    let idleHandle: number | null = null
+    const container = containerRef.current
 
-    loadYoutubeApi().then(() => {
+    const start = () => loadYoutubeApi().then(() => {
       if (cancelled || !containerRef.current || !window.YT) return
+      const mount = document.createElement("div")
+      containerRef.current.replaceChildren(mount)
 
       const startMuted = config.autoplay ? true : config.startMuted
-      const player = new window.YT.Player(containerRef.current, {
+      const player = new window.YT.Player(mount, {
         videoId: config.videoId,
+        // Fill the container (a 16:9 box when the player is visible) instead of the embed's fixed 640x360.
+        width: "100%",
+        height: "100%",
         playerVars: {
           autoplay: config.autoplay ? 1 : 0,
           mute: startMuted ? 1 : 0,
@@ -100,7 +114,15 @@ export function MusicPlayer({ config }: { config: MusicConfig }) {
             e.target.setVolume(config.volume)
             setReady(true)
 
-            if (config.autoplay) {
+            if (playOnReady.current) {
+              // The guest tapped play before the player existed — this is that tap's playback.
+              playOnReady.current = false
+              e.target.unMute()
+              setMuted(false)
+              e.target.playVideo()
+              setPlaying(true)
+              setNeedsGesture(false)
+            } else if (config.autoplay) {
               e.target.playVideo()
               // If the creator wants sound (not "start muted"), try to unmute shortly after —
               // most browsers allow this once a muted autoplay has already started.
@@ -114,6 +136,10 @@ export function MusicPlayer({ config }: { config: MusicConfig }) {
                   if (!config.startMuted) {
                     e.target.unMute()
                     setMuted(false)
+                    // Browsers may refuse the unmute without a gesture: show the real state, not the hoped-for one.
+                    setTimeout(() => {
+                      if (!cancelled) setMuted(e.target.isMuted())
+                    }, 500)
                   } else {
                     setMuted(true)
                   }
@@ -137,14 +163,28 @@ export function MusicPlayer({ config }: { config: MusicConfig }) {
       playerRef.current = player
     })
 
+    // Yield to the browser first so the invitation itself paints before the embed's scripts load.
+    if (typeof window.requestIdleCallback === "function") idleHandle = window.requestIdleCallback(() => void start(), { timeout: 1500 })
+    else checkTimer = setTimeout(() => void start(), 300)
+
     return () => {
       cancelled = true
       if (checkTimer) clearTimeout(checkTimer)
+      if (idleHandle !== null && typeof window.cancelIdleCallback === "function") window.cancelIdleCallback(idleHandle)
       playerRef.current?.destroy()
       playerRef.current = null
+      container?.replaceChildren()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [config.videoId])
+  }, [config.videoId, activated])
+
+  /** First tap on the control when the player hasn't been created yet: create it and start playing. */
+  function handleFirstTap() {
+    playOnReady.current = true
+    setActivated(true)
+    setPlaying(true)
+    setNeedsGesture(false)
+  }
 
   function handleTogglePlay() {
     const player = playerRef.current
@@ -169,13 +209,27 @@ export function MusicPlayer({ config }: { config: MusicConfig }) {
       player.mute()
       setMuted(true)
     }
-    // A guest tap always counts as a real user gesture — use it to also kick off playback
-    // if autoplay never managed to start.
-    if (needsGesture) {
-      player.playVideo()
-      setPlaying(true)
-      setNeedsGesture(false)
+  }
+
+  /**
+   * The "Play Music" fallback when the browser blocked autoplay. This tap is a real user gesture, so it may
+   * start playback WITH sound — honour the host's "start muted" setting rather than the (muted) state the
+   * blocked autoplay attempt left behind.
+   */
+  function handleGestureStart() {
+    const player = playerRef.current
+    if (!player) return
+    if (config.startMuted) {
+      player.mute()
+      setMuted(true)
+    } else {
+      player.unMute()
+      setMuted(false)
     }
+    player.setVolume(config.volume)
+    player.playVideo()
+    setPlaying(true)
+    setNeedsGesture(false)
   }
 
   if (error) return null
@@ -188,11 +242,11 @@ export function MusicPlayer({ config }: { config: MusicConfig }) {
         aria-hidden={!config.showPlayer}
       />
 
-      {config.showControl && ready && (
+      {config.showControl && (ready || !activated) && (
         <div className="fixed bottom-4 right-4 z-50 flex items-center gap-1 rounded-full border border-border/70 bg-card/95 backdrop-blur pl-3 pr-1.5 py-1.5 shadow-md hover:shadow-lg transition-shadow">
           <button
             type="button"
-            onClick={needsGesture ? handleToggleMute : handleTogglePlay}
+            onClick={!activated ? handleFirstTap : needsGesture ? handleGestureStart : handleTogglePlay}
             className="flex items-center gap-2"
             aria-label={playing ? "Pause music" : "Play music"}
           >
@@ -201,7 +255,7 @@ export function MusicPlayer({ config }: { config: MusicConfig }) {
               {needsGesture ? "Play Music" : config.title || "Music"}
             </span>
           </button>
-          {!needsGesture && (
+          {activated && !needsGesture && (
             <button
               type="button"
               onClick={handleToggleMute}

@@ -1,19 +1,16 @@
-import { notFound, redirect } from "next/navigation"
-import { requireUser } from "@/lib/session"
+import { redirect } from "next/navigation"
+import { getEventContext } from "@/lib/event-access"
 import { db } from "@/lib/db"
 import { hasFeature, FEATURES } from "@/lib/entitlements"
 import { TeamManager } from "@/components/events/team-manager"
 
 export default async function TeamPage({ params }: { params: Promise<{ eventId: string }> }) {
-  const user = await requireUser()
   const { eventId } = await params
-
-  const event = await db.event.findUnique({ where: { id: eventId } })
-  if (!event) notFound()
+  const { user, event } = await getEventContext(eventId)
   if (event.ownerId !== user.id) redirect(`/dashboard/events/${eventId}`)
 
   const [collaborators, canCollaborate] = await Promise.all([
-    db.eventCollaborator.findMany({ where: { eventId }, include: { user: true }, orderBy: { invitedAt: "desc" } }),
+    db.eventCollaborator.findMany({ relationLoadStrategy: "join", where: { eventId }, include: { user: { select: { id: true, name: true } } }, orderBy: { invitedAt: "desc" } }),
     hasFeature(user.id, eventId, FEATURES.CLIENT_COLLABORATION),
   ])
 

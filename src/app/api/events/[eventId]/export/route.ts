@@ -29,14 +29,14 @@ export async function GET(req: Request, { params }: { params: Promise<{ eventId:
     ])
     filename = `guests-${event.slug}.csv`
   } else if (type === "rsvp") {
-    const guests = await db.guest.findMany({ where: { eventId }, include: { plusOnes: true }, orderBy: [{ lastName: "asc" }, { firstName: "asc" }] })
+    const guests = await db.guest.findMany({ relationLoadStrategy: "join", where: { eventId }, include: { plusOnes: true }, orderBy: [{ lastName: "asc" }, { firstName: "asc" }] })
     body = csv([
       ["First Name", "Last Name", "RSVP Status", "Number Attending", "Plus-Ones", "Responded At"],
       ...guests.map((g) => [g.firstName, g.lastName ?? "", g.rsvpStatus, g.numberAttending ?? 0, g.plusOnes.map((p) => p.name).join("; "), g.respondedAt ? g.respondedAt.toISOString() : ""]),
     ])
     filename = `rsvp-report-${event.slug}.csv`
   } else if (type === "seating") {
-    const tables = await db.table.findMany({ where: { eventId }, include: { chairs: { include: { guest: true }, orderBy: { seatNumber: "asc" } } }, orderBy: { number: "asc" } })
+    const tables = await db.table.findMany({ relationLoadStrategy: "join", where: { eventId }, include: { chairs: { include: { guest: true }, orderBy: { seatNumber: "asc" } } }, orderBy: { number: "asc" } })
     body = csv([
       ["Table", "Seat", "Guest", "Status"],
       ...tables.flatMap((t) => t.chairs.map((c) => [t.name, c.seatNumber, c.guest ? `${c.guest.firstName} ${c.guest.lastName ?? ""}`.trim() : "", c.status])),

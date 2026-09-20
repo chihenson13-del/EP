@@ -1,3 +1,4 @@
+import { cache } from "react"
 import { db } from "@/lib/db"
 import type { PlanKey } from "@prisma/client"
 
@@ -108,18 +109,28 @@ export function getPlanLimits(plan: PlanKey): PlanLimits {
   return PLAN_LIMITS[plan]
 }
 
-/** Does the user hold an ACTIVE account-wide Unlimited entitlement? */
-export async function hasUnlimitedAccount(userId: string): Promise<boolean> {
-  const entitlement = await db.entitlement.findFirst({
+/**
+ * One query returns everything plan resolution needs: the user's active account-wide entitlements plus,
+ * when an event is given, that event's active entitlements. Memoised per request so a page and the
+ * components it renders never repeat the lookup.
+ */
+const getActiveEntitlements = cache(async (userId: string, eventId: string | null) => {
+  return db.entitlement.findMany({
+    relationLoadStrategy: "join",
     where: {
       userId,
-      scope: "ACCOUNT",
       status: "ACTIVE",
-      plan: { key: "UNLIMITED" },
+      OR: [{ scope: "ACCOUNT" }, ...(eventId ? [{ scope: "EVENT" as const, eventId }] : [])],
     },
-    select: { id: true },
+    select: { scope: true, plan: { select: { key: true } } },
+    orderBy: { activatedAt: "desc" },
   })
-  return !!entitlement
+})
+
+/** Does the user hold an ACTIVE account-wide Unlimited entitlement? */
+export async function hasUnlimitedAccount(userId: string): Promise<boolean> {
+  const rows = await getActiveEntitlements(userId, null)
+  return rows.some((r) => r.scope === "ACCOUNT" && r.plan.key === "UNLIMITED")
 }
 
 /**
@@ -129,24 +140,11 @@ export async function hasUnlimitedAccount(userId: string): Promise<boolean> {
  * "can this user create another event" checks).
  */
 export async function getEffectivePlan(userId: string, eventId: string | null): Promise<EffectivePlan> {
-  const unlimited = await hasUnlimitedAccount(userId)
-  if (unlimited) return "UNLIMITED"
-
+  const rows = await getActiveEntitlements(userId, eventId)
+  if (rows.some((r) => r.scope === "ACCOUNT" && r.plan.key === "UNLIMITED")) return "UNLIMITED"
   if (!eventId) return "FREE"
-
-  const entitlement = await db.entitlement.findFirst({
-    where: {
-      userId,
-      eventId,
-      scope: "EVENT",
-      status: "ACTIVE",
-    },
-    include: { plan: true },
-    orderBy: { activatedAt: "desc" },
-  })
-
-  if (!entitlement) return "FREE"
-  return entitlement.plan.key
+  // Rows are ordered newest-first, so the first EVENT entitlement is the most recently activated one.
+  return rows.find((r) => r.scope === "EVENT")?.plan.key ?? "FREE"
 }
 
 export async function hasFeature(userId: string, eventId: string | null, feature: Feature): Promise<boolean> {

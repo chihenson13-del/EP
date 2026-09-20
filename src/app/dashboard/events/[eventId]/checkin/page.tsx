@@ -1,13 +1,10 @@
-import { notFound } from "next/navigation"
-import { requireUser } from "@/lib/session"
+import { getEventContext } from "@/lib/event-access"
 import { db } from "@/lib/db"
 import { CheckInConsole } from "@/components/checkin/checkin-console"
 
 export default async function CheckInPage({ params }: { params: Promise<{ eventId: string }> }) {
-  await requireUser()
   const { eventId } = await params
-  const event = await db.event.findUnique({ where: { id: eventId }, select: { id: true, name: true } })
-  if (!event) notFound()
+  await getEventContext(eventId)
 
   const guests = await db.guest.findMany({
     where: { eventId, rsvpStatus: "ATTENDING" },

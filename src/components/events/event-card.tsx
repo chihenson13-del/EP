@@ -1,5 +1,6 @@
 "use client"
 
+import { formatDate } from "@/lib/timezone"
 import { useState, useTransition } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
@@ -29,6 +30,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 
+import { safe } from "@/lib/safe-action"
 export type EventCardData = {
   id: string
   name: string
@@ -72,7 +74,7 @@ export function EventCard({ event }: { event: EventCardData }) {
 
   function handleDuplicate() {
     startTransition(async () => {
-      const result = await duplicateEvent(event.id)
+      const result = await safe(duplicateEvent(event.id))
       if (!result.ok) {
         toast.error(result.error)
         return
@@ -85,7 +87,7 @@ export function EventCard({ event }: { event: EventCardData }) {
   function handlePublishToggle() {
     startTransition(async () => {
       const next = event.status === "PUBLISHED" ? "UNPUBLISHED" : "PUBLISHED"
-      const result = await setEventStatus(event.id, next)
+      const result = await safe(setEventStatus(event.id, next))
       if (!result.ok) {
         toast.error(result.error)
         return
@@ -98,7 +100,7 @@ export function EventCard({ event }: { event: EventCardData }) {
   function handleArchiveToggle() {
     startTransition(async () => {
       const next = event.status === "ARCHIVED" ? "DRAFT" : "ARCHIVED"
-      const result = await setEventStatus(event.id, next)
+      const result = await safe(setEventStatus(event.id, next))
       if (!result.ok) {
         toast.error(result.error)
         return
@@ -110,7 +112,7 @@ export function EventCard({ event }: { event: EventCardData }) {
 
   function handleDelete() {
     startTransition(async () => {
-      const result = await deleteEvent(event.id)
+      const result = await safe(deleteEvent(event.id))
       if (!result.ok) {
         toast.error(result.error)
         return
@@ -165,7 +167,7 @@ export function EventCard({ event }: { event: EventCardData }) {
           {event.date && (
             <div className="flex items-center gap-1.5">
               <CalendarDays className="size-3.5" />
-              {new Date(event.date).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
+              {formatDate(event.date, { month: "short", day: "numeric", year: "numeric" })}
             </div>
           )}
           {event.venueName && (

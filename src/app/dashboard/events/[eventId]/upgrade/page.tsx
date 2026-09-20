@@ -1,16 +1,11 @@
-import { notFound } from "next/navigation"
-import { requireUser } from "@/lib/session"
-import { db } from "@/lib/db"
+import { getEventContext } from "@/lib/event-access"
 import { getEffectivePlan, hasUnlimitedAccount, PLAN_PRICING } from "@/lib/entitlements"
 import { EventPlanCards } from "@/components/payments/event-plan-cards"
 import { Badge } from "@/components/ui/badge"
 
 export default async function EventUpgradePage({ params }: { params: Promise<{ eventId: string }> }) {
-  const user = await requireUser()
   const { eventId } = await params
-
-  const event = await db.event.findUnique({ where: { id: eventId }, select: { id: true, name: true } })
-  if (!event) notFound()
+  const { user, event } = await getEventContext(eventId)
 
   const [plan, unlimited] = await Promise.all([getEffectivePlan(user.id, eventId), hasUnlimitedAccount(user.id)])
 

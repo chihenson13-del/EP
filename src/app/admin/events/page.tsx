@@ -1,11 +1,15 @@
+import { formatDate } from "@/lib/timezone"
+import { requireAdmin } from "@/lib/session"
 import { db } from "@/lib/db"
 import { getEventTypeConfig } from "@/lib/event-types"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 
 export default async function AdminEventsPage() {
+  await requireAdmin()
   const events = await db.event.findMany({
-    include: { owner: true, _count: { select: { guests: true } }, entitlements: { where: { status: "ACTIVE" }, include: { plan: true }, take: 1, orderBy: { activatedAt: "desc" } } },
+    relationLoadStrategy: "join",
+    include: { owner: { select: { name: true, email: true } }, _count: { select: { guests: true } }, entitlements: { where: { status: "ACTIVE" }, include: { plan: true }, take: 1, orderBy: { activatedAt: "desc" } } },
     orderBy: { createdAt: "desc" },
   })
 
@@ -34,7 +38,7 @@ export default async function AdminEventsPage() {
                 <TableCell><Badge variant="outline">{e.status}</Badge></TableCell>
                 <TableCell>{e._count.guests}</TableCell>
                 <TableCell><Badge variant="outline">{e.entitlements[0]?.plan.name ?? "Free"}</Badge></TableCell>
-                <TableCell className="text-sm text-muted-foreground">{new Date(e.createdAt).toLocaleDateString()}</TableCell>
+                <TableCell className="text-sm text-muted-foreground">{formatDate(e.createdAt)}</TableCell>
               </TableRow>
             ))}
           </TableBody>

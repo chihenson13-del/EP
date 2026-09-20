@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 
+import { safe } from "@/lib/safe-action"
 type Guest = { id: string; firstName: string; lastName: string | null; category: string | null; checkedIn: boolean; checkedInAt: string | null; rsvpToken: string; numberAttending: number | null }
 
 export function CheckInConsole({ eventId, guests }: { eventId: string; guests: Guest[] }) {
@@ -27,7 +28,7 @@ export function CheckInConsole({ eventId, guests }: { eventId: string; guests: G
 
   function handleCheckIn(id: string) {
     startTransition(async () => {
-      const result = await checkInGuest(eventId, id)
+      const result = await safe(checkInGuest(eventId, id))
       if (!result.ok) {
         toast.error(result.error)
         return
@@ -39,7 +40,7 @@ export function CheckInConsole({ eventId, guests }: { eventId: string; guests: G
 
   function handleUndo(id: string) {
     startTransition(async () => {
-      const result = await undoCheckIn(eventId, id)
+      const result = await safe(undoCheckIn(eventId, id))
       if (!result.ok) {
         toast.error(result.error)
         return
@@ -52,7 +53,7 @@ export function CheckInConsole({ eventId, guests }: { eventId: string; guests: G
     e.preventDefault()
     if (!scanValue.trim()) return
     startTransition(async () => {
-      const result = await checkInByToken(eventId, scanValue.trim())
+      const result = await safe(checkInByToken(eventId, scanValue.trim()))
       setScanValue("")
       if (!result.ok) {
         toast.error(result.error)

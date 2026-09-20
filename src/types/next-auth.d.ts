@@ -20,5 +20,6 @@ declare module "next-auth/jwt" {
     id: string
     role: string
     emailVerified: Date | null
+    refreshedAt?: number
   }
 }

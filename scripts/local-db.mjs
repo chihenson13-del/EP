@@ -5,6 +5,7 @@
 import EmbeddedPostgres from "embedded-postgres"
 import { fileURLToPath } from "url"
 import path from "path"
+import fs from "fs"
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const databaseDir = path.join(__dirname, "..", ".pgdata")
@@ -24,7 +25,8 @@ const url = "postgresql://postgres:postgres@localhost:5433/events_partner?schema
 
 async function main() {
   console.log("Starting local PostgreSQL (first run downloads/initializes the cluster, this can take a minute)...")
-  await pg.initialise()
+  // initdb refuses a non-empty directory, so only initialise a brand-new cluster.
+  if (!fs.existsSync(path.join(databaseDir, "PG_VERSION"))) await pg.initialise()
   await pg.start()
   await pg.createDatabase("events_partner").catch(() => {
     // already exists — fine

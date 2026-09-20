@@ -7,6 +7,7 @@ import { setEventStatus } from "@/actions/events"
 import { Button } from "@/components/ui/button"
 import type { EventStatus } from "@prisma/client"
 
+import { safe } from "@/lib/safe-action"
 export function PublishToggle({ eventId, status }: { eventId: string; status: EventStatus }) {
   const [pending, startTransition] = useTransition()
   const router = useRouter()
@@ -14,7 +15,7 @@ export function PublishToggle({ eventId, status }: { eventId: string; status: Ev
 
   function toggle() {
     startTransition(async () => {
-      const result = await setEventStatus(eventId, published ? "UNPUBLISHED" : "PUBLISHED")
+      const result = await safe(setEventStatus(eventId, published ? "UNPUBLISHED" : "PUBLISHED"))
       if (!result.ok) {
         toast.error(result.error)
         return

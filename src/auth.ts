@@ -6,6 +6,8 @@ import { PrismaAdapter } from "@auth/prisma-adapter"
 import bcrypt from "bcryptjs"
 import { db } from "@/lib/db"
 
+const PROFILE_REFRESH_MS = 5 * 60 * 1000
+
 const providers: Provider[] = [
   Credentials({
     name: "Email and password",
@@ -78,8 +80,15 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token.id = user.id as string
         token.role = (user as { role?: string }).role ?? "USER"
         token.emailVerified = (user as { emailVerified?: Date | null }).emailVerified ?? null
+        token.refreshedAt = Date.now()
       }
-      if (trigger === "update" || (!user && token.id)) {
+      // Profile fields are re-read from the database when the session is explicitly updated, or at most
+      // every PROFILE_REFRESH_MS otherwise. Previously this ran a query on EVERY request, which added a
+      // full database round trip in front of every page and server action. Admin authorisation does not
+      // rely on this cache: requireAdmin() re-reads the role from the database.
+      const stale = typeof token.refreshedAt !== "number" || Date.now() - token.refreshedAt > PROFILE_REFRESH_MS
+      if (trigger === "update" || (!user && token.id && stale)) {
+        token.refreshedAt = Date.now()
         const dbUser = await db.user.findUnique({ where: { id: token.id as string } })
         if (dbUser) {
           token.role = dbUser.role

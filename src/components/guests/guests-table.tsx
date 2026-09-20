@@ -15,6 +15,7 @@ import { GuestFormDialog } from "@/components/guests/guest-form-dialog"
 import { bulkDeleteGuests, bulkSetRsvpStatus, deleteGuest } from "@/actions/guests"
 import { toCsv } from "@/lib/csv"
 
+import { safe } from "@/lib/safe-action"
 type Guest = {
   id: string
   firstName: string
@@ -42,9 +43,14 @@ const STATUS_VARIANT: Record<Guest["rsvpStatus"], "default" | "secondary" | "out
   PENDING: "secondary",
 }
 
+/** Rows drawn at once. Search, filters, select-all and CSV export always work on the full list. */
+const PAGE_SIZE = 100
+
 export function GuestsTable({ eventId, eventSlug, guests }: { eventId: string; eventSlug: string; guests: Guest[] }) {
   const [search, setSearch] = useState("")
-  const [statusFilter, setStatusFilter] = useState<string>("ALL")
+  const [statusFilter, setStatusFilterState] = useState<string>("ALL")
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
+  const setStatusFilter = (v: string) => { setStatusFilterState(v); setVisibleCount(PAGE_SIZE) }
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [editing, setEditing] = useState<Guest | null>(null)
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -58,6 +64,8 @@ export function GuestsTable({ eventId, eventSlug, guests }: { eventId: string; e
       return haystack.includes(search.toLowerCase())
     })
   }, [guests, search, statusFilter])
+
+  const shown = filtered.slice(0, visibleCount)
 
   function toggleAll(checked: boolean) {
     setSelected(checked ? new Set(filtered.map((g) => g.id)) : new Set())
@@ -84,7 +92,7 @@ export function GuestsTable({ eventId, eventSlug, guests }: { eventId: string; e
 
   function handleDelete(id: string) {
     startTransition(async () => {
-      const result = await deleteGuest(eventId, id)
+      const result = await safe(deleteGuest(eventId, id))
       if (!result.ok) {
         toast.error(result.error)
         return
@@ -96,7 +104,7 @@ export function GuestsTable({ eventId, eventSlug, guests }: { eventId: string; e
   function handleBulkDelete() {
     if (!selected.size) return
     startTransition(async () => {
-      const result = await bulkDeleteGuests(eventId, Array.from(selected))
+      const result = await safe(bulkDeleteGuests(eventId, Array.from(selected)))
       if (!result.ok) {
         toast.error(result.error)
         return
@@ -109,7 +117,7 @@ export function GuestsTable({ eventId, eventSlug, guests }: { eventId: string; e
   function handleBulkStatus(status: Guest["rsvpStatus"]) {
     if (!selected.size) return
     startTransition(async () => {
-      const result = await bulkSetRsvpStatus(eventId, Array.from(selected), status)
+      const result = await safe(bulkSetRsvpStatus(eventId, Array.from(selected), status))
       if (!result.ok) {
         toast.error(result.error)
         return
@@ -130,7 +138,7 @@ export function GuestsTable({ eventId, eventSlug, guests }: { eventId: string; e
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative flex-1 min-w-[200px]">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-          <Input placeholder="Search guests..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-8" />
+          <Input placeholder="Search guests..." value={search} onChange={(e) => { setSearch(e.target.value); setVisibleCount(PAGE_SIZE) }} className="pl-8" />
         </div>
         <Select value={statusFilter} onValueChange={setStatusFilter}>
           <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
@@ -177,7 +185,7 @@ export function GuestsTable({ eventId, eventSlug, guests }: { eventId: string; e
             {filtered.length === 0 && (
               <TableRow><TableCell colSpan={9} className="text-center text-muted-foreground py-10">No guests found.</TableCell></TableRow>
             )}
-            {filtered.map((g) => (
+            {shown.map((g) => (
               <TableRow key={g.id}>
                 <TableCell><Checkbox checked={selected.has(g.id)} onCheckedChange={(c) => toggleOne(g.id, !!c)} /></TableCell>
                 <TableCell className="font-medium">{g.firstName} {g.lastName}</TableCell>
@@ -204,6 +212,12 @@ export function GuestsTable({ eventId, eventSlug, guests }: { eventId: string; e
           </TableBody>
         </Table>
       </div>
+      {filtered.length > shown.length && (
+        <div className="flex items-center justify-center gap-3 text-sm text-muted-foreground">
+          <span>Showing {shown.length} of {filtered.length} guests</span>
+          <Button variant="outline" size="sm" onClick={() => setVisibleCount((c) => c + PAGE_SIZE)}>Show more</Button>
+        </div>
+      )}
 
       <GuestFormDialog eventId={eventId} open={dialogOpen} onOpenChange={setDialogOpen} guest={editing} />
     </div>

@@ -1,19 +1,16 @@
-import { notFound } from "next/navigation"
-import { requireUser } from "@/lib/session"
+import { getEventContext } from "@/lib/event-access"
 import { db } from "@/lib/db"
 import { GuestsTable } from "@/components/guests/guests-table"
 
 export default async function GuestsPage({ params }: { params: Promise<{ eventId: string }> }) {
-  await requireUser()
   const { eventId } = await params
-
-  const event = await db.event.findUnique({ where: { id: eventId }, select: { id: true, name: true, slug: true } })
-  if (!event) notFound()
+  const { event } = await getEventContext(eventId)
 
   const guests = await db.guest.findMany({
+    relationLoadStrategy: "join",
     where: { eventId },
     orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
-    include: { plusOnes: true, chair: { include: { table: true } } },
+    include: { plusOnes: true, chair: { select: { seatNumber: true, table: { select: { name: true } } } } },
   })
 
   return (

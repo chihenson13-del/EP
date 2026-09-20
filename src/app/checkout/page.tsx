@@ -4,7 +4,7 @@ import { requireUser } from "@/lib/session"
 import { db } from "@/lib/db"
 import { getEventAccessRole } from "@/lib/event-access"
 import { getEffectivePlan, hasUnlimitedAccount, PLAN_RANK, PLAN_PRICING } from "@/lib/entitlements"
-import { getPlatformSettings } from "@/actions/platform-settings"
+import { getDisplayPaymentSettings } from "@/lib/platform-settings"
 import { Logo } from "@/components/brand/logo"
 import { CheckoutForm } from "@/components/payments/checkout-form"
 import type { PlanKey } from "@prisma/client"
@@ -40,7 +40,7 @@ export default async function CheckoutPage({
     }
   }
 
-  const settings = await getPlatformSettings()
+  const checkoutSettings = await getDisplayPaymentSettings()
   const pricing = PLAN_PRICING[plan]
 
   return (
@@ -62,7 +62,7 @@ export default async function CheckoutPage({
             amount={pricing.price}
             event={event}
             user={{ name: user.name ?? "", email: user.email ?? "" }}
-            settings={JSON.parse(JSON.stringify(settings))}
+            settings={JSON.parse(JSON.stringify(checkoutSettings))}
           />
         </div>
       </main>

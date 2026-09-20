@@ -17,7 +17,9 @@ function LoginForm() {
   const router = useRouter()
   const params = useSearchParams()
   const [loading, setLoading] = useState(false)
-  const callbackUrl = params.get("callbackUrl") ?? "/dashboard"
+  // Only same-site paths are honoured; an absolute or protocol-relative URL would be an open redirect.
+  const requested = params.get("callbackUrl")
+  const callbackUrl = requested && requested.startsWith("/") && !requested.startsWith("//") && !requested.startsWith("/\\") ? requested : "/dashboard"
 
   const form = useForm<LoginInput>({
     resolver: zodResolver(loginSchema),

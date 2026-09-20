@@ -12,6 +12,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ eventId
   if (!role) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
   const table = await db.table.findFirst({
+    relationLoadStrategy: "join",
     where: { id: tableId, eventId },
     include: { chairs: { include: { guest: true }, orderBy: { seatNumber: "asc" } } },
   })

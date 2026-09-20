@@ -1,3 +1,4 @@
+import { calendarDayOf } from "@/lib/timezone"
 import type { EventStatus, EventType } from "@prisma/client"
 
 export type BookingStatus = "PENDING" | "CONFIRMED" | "CANCELLED" | "COMPLETED"
@@ -61,10 +62,10 @@ export type EventWindow = { start: Date; end: Date; allDay: boolean }
 export function getEventWindow(event: { date: Date | null; endDate: Date | null; timeLabel: string | null }): EventWindow | null {
   if (!event.date) return null
   const time = parseTimeLabel(event.timeLabel)
-  const start = new Date(event.date)
+  const start = calendarDayOf(event.date)
 
   if (!time) {
-    const end = event.endDate ? new Date(event.endDate) : new Date(start)
+    const end = event.endDate ? calendarDayOf(event.endDate) : new Date(start)
     end.setHours(23, 59, 59, 999)
     start.setHours(0, 0, 0, 0)
     return { start, end, allDay: true }

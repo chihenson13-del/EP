@@ -12,7 +12,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 
-export function UserMenu({ user }: { user: { name: string; email: string; image: string | null } }) {
+export function UserMenu({ user }: { user: { name: string; email: string; image: string | null; role?: string } }) {
   const initials = (user.name || user.email || "?")
     .split(" ")
     .map((p) => p[0])
@@ -37,12 +37,21 @@ export function UserMenu({ user }: { user: { name: string; email: string; image:
         <DropdownMenuItem asChild>
           <Link href="/dashboard">My Events</Link>
         </DropdownMenuItem>
+        {/* The top navigation is hidden on small screens, so these must be reachable from the menu. */}
+        <DropdownMenuItem asChild className="md:hidden">
+          <Link href="/dashboard/calendar">Booking Calendar</Link>
+        </DropdownMenuItem>
         <DropdownMenuItem asChild>
           <Link href="/dashboard/purchases">Purchases</Link>
         </DropdownMenuItem>
         <DropdownMenuItem asChild>
           <Link href="/dashboard/settings">Account settings</Link>
         </DropdownMenuItem>
+        {user.role === "ADMIN" && (
+          <DropdownMenuItem asChild className="md:hidden">
+            <Link href="/admin">Admin</Link>
+          </DropdownMenuItem>
+        )}
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={() => signOut({ callbackUrl: "/" })}>Log out</DropdownMenuItem>
       </DropdownMenuContent>

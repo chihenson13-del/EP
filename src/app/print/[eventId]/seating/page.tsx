@@ -12,6 +12,7 @@ export default async function PrintSeatingPage({ params }: { params: Promise<{ e
 
   const event = await db.event.findUniqueOrThrow({ where: { id: eventId } })
   const tables = await db.table.findMany({
+    relationLoadStrategy: "join",
     where: { eventId },
     include: { chairs: { include: { guest: true }, orderBy: { seatNumber: "asc" } } },
     orderBy: { number: "asc" },

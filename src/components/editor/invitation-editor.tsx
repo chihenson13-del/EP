@@ -1,6 +1,7 @@
 "use client"
 
-import { useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
+import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import {
   Type, Square, Circle, ImageIcon, Undo2, Redo2, ZoomIn, ZoomOut, Maximize,
@@ -17,6 +18,7 @@ import { ImageUpload } from "@/components/shared/image-upload"
 import { DesignObjectNode } from "@/components/editor/design-object-node"
 import type { DesignObject, CanvasData } from "@/components/editor/types"
 
+import { safe } from "@/lib/safe-action"
 const nanoidLike = () => Math.random().toString(36).slice(2, 10)
 
 export function InvitationEditor({ eventId, design }: { eventId: string; design: { width: number; height: number; canvasJson: unknown } }) {
@@ -27,37 +29,94 @@ export function InvitationEditor({ eventId, design }: { eventId: string; design:
   const [preview, setPreview] = useState<"desktop" | "mobile">("desktop")
   const [dirty, setDirty] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [saveFailed, setSaveFailed] = useState(false)
+  // Bumped when edits arrived while a save was in flight, so the debounced autosave is re-armed for them.
+  const [resaveTick, setResaveTick] = useState(0)
+  const router = useRouter()
   const svgRef = useRef<SVGSVGElement>(null)
+  // Latest objects for the autosave/preview handlers (state is replaced, never mutated).
+  const objectsRef = useRef(objects)
+  const savingRef = useRef(false)
+  const moveFrame = useRef<number | null>(null)
+  const lastPointer = useRef<{ x: number; y: number } | null>(null)
   const historyRef = useRef<DesignObject[][]>([])
   const redoRef = useRef<DesignObject[][]>([])
   const dragRef = useRef<null | { kind: "move" | "resize" | "rotate"; id: string; startSvg: { x: number; y: number }; start: DesignObject }>(null)
 
   const selected = objects.find((o) => o.id === selectedId) ?? null
 
-  function snapshot() {
-    historyRef.current.push(structuredClone(objects))
+  useEffect(() => {
+    objectsRef.current = objects
+  })
+
+  // History keeps references to earlier arrays (objects are replaced, never mutated) — no deep clones of
+  // embedded images on every click.
+  const snapshot = useCallback(() => {
+    historyRef.current.push(objectsRef.current)
     if (historyRef.current.length > 50) historyRef.current.shift()
     redoRef.current = []
-  }
+  }, [])
 
   function commit(next: DesignObject[]) {
+    objectsRef.current = next
     setObjects(next)
     setDirty(true)
+    setSaveFailed(false)
   }
 
   function undo() {
     const prev = historyRef.current.pop()
     if (!prev) return
-    redoRef.current.push(structuredClone(objects))
-    setObjects(prev)
-    setDirty(true)
+    redoRef.current.push(objects)
+    commit(prev)
   }
   function redo() {
     const next = redoRef.current.pop()
     if (!next) return
-    historyRef.current.push(structuredClone(objects))
-    setObjects(next)
-    setDirty(true)
+    historyRef.current.push(objects)
+    commit(next)
+  }
+
+  /** Save the current design. Returns true when the server confirmed it. */
+  const save = useCallback(async (opts?: { silent?: boolean }): Promise<boolean> => {
+    if (savingRef.current) return false
+    savingRef.current = true
+    setSaving(true)
+    const snapshotAtSave = objectsRef.current
+    const result = await safe(saveDesign(eventId, { objects: snapshotAtSave }))
+    savingRef.current = false
+    setSaving(false)
+    if (!result.ok) {
+      setSaveFailed(true)
+      toast.error(`Save failed: ${result.error}`)
+      return false
+    }
+    // If the user kept editing while the request ran, keep the design marked as changed and schedule another save.
+    if (objectsRef.current === snapshotAtSave) setDirty(false)
+    else setResaveTick((t) => t + 1)
+    setSaveFailed(false)
+    if (!opts?.silent) toast.success("Design saved.")
+    return true
+  }, [eventId])
+
+  // Debounced autosave: local edits stay instant; the database is written once the user pauses.
+  useEffect(() => {
+    if (!dirty || saveFailed) return
+    const timer = setTimeout(() => { void save({ silent: true }) }, 2500)
+    return () => clearTimeout(timer)
+  }, [objects, dirty, saveFailed, save, resaveTick])
+
+  // Don't let unsaved work vanish silently.
+  useEffect(() => {
+    if (!dirty) return
+    const warn = (e: BeforeUnloadEvent) => { e.preventDefault() }
+    window.addEventListener("beforeunload", warn)
+    return () => window.removeEventListener("beforeunload", warn)
+  }, [dirty])
+
+  async function openPreview() {
+    if (dirty && !(await save({ silent: true }))) return
+    router.push(`/dashboard/events/${eventId}/preview`)
   }
 
   function toSvgPoint(clientX: number, clientY: number) {
@@ -73,9 +132,9 @@ export function InvitationEditor({ eventId, design }: { eventId: string; design:
     const base: DesignObject = {
       id: nanoidLike(), type, x: design.width / 2 - 80, y: design.height / 2 - 40, width: 160, height: 80,
       rotation: 0, zIndex: objects.length,
-      ...(type === "text" ? { text: "Double-click to edit", fontSize: 28, color: "var(--brand-plum)", fontWeight: 700, align: "center" } : {}),
-      ...(type === "rect" ? { fill: "var(--brand-beige)", rx: 8 } : {}),
-      ...(type === "ellipse" ? { fill: "var(--brand-beige)" } : {}),
+      ...(type === "text" ? { text: "Double-click to edit", fontSize: 28, color: "#403447", fontWeight: 700, align: "center" } : {}),
+      ...(type === "rect" ? { fill: "#f3e8dc", rx: 8 } : {}),
+      ...(type === "ellipse" ? { fill: "#f3e8dc" } : {}),
       ...(type === "image" ? { src: "", width: 200, height: 200 } : {}),
     }
     commit([...objects, base])
@@ -87,54 +146,65 @@ export function InvitationEditor({ eventId, design }: { eventId: string; design:
     commit(objects.map((o) => (o.id === selected.id ? { ...o, ...patch } : o)))
   }
 
-  function beginMove(obj: DesignObject) {
-    return (e: React.PointerEvent) => {
-      ;(e.target as Element).setPointerCapture(e.pointerId)
-      if (obj.locked) return setSelectedId(obj.id)
-      snapshot()
-      setSelectedId(obj.id)
-      dragRef.current = { kind: "move", id: obj.id, startSvg: toSvgPoint(e.clientX, e.clientY), start: obj }
-    }
-  }
-  function beginResize(obj: DesignObject) {
-    return (e: React.PointerEvent) => {
-      e.stopPropagation()
-      ;(e.target as Element).setPointerCapture(e.pointerId)
-      snapshot()
-      dragRef.current = { kind: "resize", id: obj.id, startSvg: toSvgPoint(e.clientX, e.clientY), start: obj }
-    }
-  }
-  function beginRotate(obj: DesignObject) {
-    return (e: React.PointerEvent) => {
-      e.stopPropagation()
-      ;(e.target as Element).setPointerCapture(e.pointerId)
-      snapshot()
-      dragRef.current = { kind: "rotate", id: obj.id, startSvg: toSvgPoint(e.clientX, e.clientY), start: obj }
-    }
-  }
+  const beginMove = useCallback((obj: DesignObject, e: React.PointerEvent) => {
+    e.stopPropagation()
+    ;(e.target as Element).setPointerCapture(e.pointerId)
+    if (obj.locked) return setSelectedId(obj.id)
+    snapshot()
+    setSelectedId(obj.id)
+    dragRef.current = { kind: "move", id: obj.id, startSvg: toSvgPoint(e.clientX, e.clientY), start: obj }
+  }, [snapshot])
+  const beginResize = useCallback((obj: DesignObject, e: React.PointerEvent) => {
+    e.stopPropagation()
+    ;(e.target as Element).setPointerCapture(e.pointerId)
+    snapshot()
+    dragRef.current = { kind: "resize", id: obj.id, startSvg: toSvgPoint(e.clientX, e.clientY), start: obj }
+  }, [snapshot])
+  const beginRotate = useCallback((obj: DesignObject, e: React.PointerEvent) => {
+    e.stopPropagation()
+    ;(e.target as Element).setPointerCapture(e.pointerId)
+    snapshot()
+    dragRef.current = { kind: "rotate", id: obj.id, startSvg: toSvgPoint(e.clientX, e.clientY), start: obj }
+  }, [snapshot])
 
-  function handlePointerMove(e: React.PointerEvent) {
+  /** Apply the latest pointer position; runs at most once per animation frame. */
+  function applyDrag() {
+    moveFrame.current = null
     const drag = dragRef.current
-    if (!drag) return
-    const p = toSvgPoint(e.clientX, e.clientY)
+    const pointer = lastPointer.current
+    if (!drag || !pointer) return
+    const p = toSvgPoint(pointer.x, pointer.y)
     const dx = p.x - drag.startSvg.x
     const dy = p.y - drag.startSvg.y
 
+    let patch: Partial<DesignObject>
     if (drag.kind === "move") {
-      setObjects((prev) => prev.map((o) => (o.id === drag.id ? { ...o, x: drag.start.x + dx, y: drag.start.y + dy } : o)))
+      patch = { x: drag.start.x + dx, y: drag.start.y + dy }
     } else if (drag.kind === "resize") {
-      setObjects((prev) => prev.map((o) => (o.id === drag.id ? { ...o, width: Math.max(20, drag.start.width + dx), height: Math.max(20, drag.start.height + dy) } : o)))
-    } else if (drag.kind === "rotate") {
+      patch = { width: Math.max(20, drag.start.width + dx), height: Math.max(20, drag.start.height + dy) }
+    } else {
       const cx = drag.start.x + drag.start.width / 2
       const cy = drag.start.y + drag.start.height / 2
-      const angle = (Math.atan2(p.y - cy, p.x - cx) * 180) / Math.PI + 90
-      setObjects((prev) => prev.map((o) => (o.id === drag.id ? { ...o, rotation: Math.round(angle) } : o)))
+      patch = { rotation: Math.round((Math.atan2(p.y - cy, p.x - cx) * 180) / Math.PI + 90) }
     }
+    const next = objectsRef.current.map((o) => (o.id === drag.id ? { ...o, ...patch } : o))
+    objectsRef.current = next
+    setObjects(next)
+  }
+
+  function handlePointerMove(e: React.PointerEvent) {
+    if (!dragRef.current) return
+    lastPointer.current = { x: e.clientX, y: e.clientY }
+    if (moveFrame.current === null) moveFrame.current = requestAnimationFrame(applyDrag)
   }
 
   function handlePointerUp() {
-    if (dragRef.current) setDirty(true)
+    if (!dragRef.current) return
+    if (moveFrame.current !== null) cancelAnimationFrame(moveFrame.current)
+    applyDrag()
     dragRef.current = null
+    setDirty(true)
+    setSaveFailed(false)
   }
 
   function zoom(factor: number) {
@@ -174,20 +244,11 @@ export function InvitationEditor({ eventId, design }: { eventId: string; design:
     commit(sorted.map((o, i) => ({ ...o, zIndex: i })))
   }
 
-  async function handleSave() {
-    setSaving(true)
-    const result = await saveDesign(eventId, { objects })
-    setSaving(false)
-    if (!result.ok) return toast.error(result.error)
-    setDirty(false)
-    toast.success("Design saved.")
-  }
-
   const sortedObjects = [...objects].sort((a, b) => a.zIndex - b.zIndex)
   const previewWidth = preview === "mobile" ? 375 : design.width
 
   return (
-    <div className="flex flex-col h-[calc(100vh-8rem)] lg:h-[calc(100vh-6rem)]">
+    <div className="flex flex-col lg:h-[calc(100vh-6rem)]">
       <div className="flex flex-wrap items-center gap-1.5 border-b bg-card p-2">
         <Button size="sm" variant="outline" onClick={() => addObject("text")}><Type className="size-3.5" /> Text</Button>
         <Button size="sm" variant="outline" onClick={() => addObject("rect")}><Square className="size-3.5" /> Shape</Button>
@@ -204,11 +265,15 @@ export function InvitationEditor({ eventId, design }: { eventId: string; design:
         <Button size="icon" variant={preview === "desktop" ? "secondary" : "ghost"} className="size-8" onClick={() => setPreview("desktop")}><Monitor className="size-4" /></Button>
         <Button size="icon" variant={preview === "mobile" ? "secondary" : "ghost"} className="size-8" onClick={() => setPreview("mobile")}><Smartphone className="size-4" /></Button>
         <div className="flex-1" />
-        <Button size="sm" onClick={handleSave} disabled={saving}><Save className="size-3.5" /> {saving ? "Saving..." : dirty ? "Save changes" : "Saved"}</Button>
+        <Button size="sm" variant="outline" onClick={openPreview} disabled={saving}><Eye className="size-3.5" /> Preview</Button>
+        <Button size="sm" onClick={() => save()} disabled={saving} variant={saveFailed ? "destructive" : "default"}>
+          <Save className="size-3.5" /> {saving ? "Saving..." : saveFailed ? "Save failed — retry" : dirty ? "Save changes" : "Saved"}
+        </Button>
       </div>
 
-      <div className="flex-1 flex min-h-0">
-        <div className="flex-1 bg-secondary/20 overflow-hidden flex items-center justify-center">
+      {/* Canvas above the properties panel on phones; side by side from lg up. */}
+      <div className="flex-1 flex flex-col lg:flex-row lg:min-h-0">
+        <div className="h-[55vh] lg:h-auto flex-1 bg-secondary/20 overflow-hidden flex items-center justify-center">
           <svg
             ref={svgRef}
             viewBox={`${viewBox.x} ${viewBox.y} ${viewBox.w} ${viewBox.h}`}
@@ -225,15 +290,15 @@ export function InvitationEditor({ eventId, design }: { eventId: string; design:
                 key={obj.id}
                 object={obj}
                 selected={selectedId === obj.id}
-                onPointerDown={(e) => { e.stopPropagation(); beginMove(obj)(e) }}
-                onResizeStart={beginResize(obj)}
-                onRotateStart={beginRotate(obj)}
+                onPointerDown={beginMove}
+                onResizeStart={beginResize}
+                onRotateStart={beginRotate}
               />
             ))}
           </svg>
         </div>
 
-        <div className="w-72 shrink-0 border-l bg-card overflow-y-auto">
+        <div className="w-full lg:w-72 shrink-0 border-t lg:border-t-0 lg:border-l bg-card overflow-y-auto max-h-[50vh] lg:max-h-none">
           {selected ? (
             <ObjectPanel
               object={selected}
@@ -280,7 +345,7 @@ function ObjectPanel({
         <>
           <Field label="Text"><Textarea rows={3} value={object.text ?? ""} onChange={(e) => onChange({ text: e.target.value })} /></Field>
           <Field label="Font size"><Input type="number" value={object.fontSize ?? 24} onChange={(e) => onChange({ fontSize: Number(e.target.value) })} /></Field>
-          <Field label="Color"><Input type="color" value={object.color ?? "#403447"} onChange={(e) => onChange({ color: e.target.value })} className="h-9 p-1" /></Field>
+          <Field label="Color"><Input type="color" value={toHex(object.color, "#403447")} onChange={(e) => onChange({ color: e.target.value })} className="h-9 p-1" /></Field>
           <Field label="Alignment">
             <Select value={object.align ?? "center"} onValueChange={(v) => onChange({ align: v as DesignObject["align"] })}>
               <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
@@ -292,7 +357,7 @@ function ObjectPanel({
 
       {(object.type === "rect" || object.type === "ellipse") && (
         <>
-          <Field label="Fill color"><Input type="color" value={object.fill ?? "#f3e8dc"} onChange={(e) => onChange({ fill: e.target.value })} className="h-9 p-1" /></Field>
+          <Field label="Fill color"><Input type="color" value={toHex(object.fill, "#f3e8dc")} onChange={(e) => onChange({ fill: e.target.value })} className="h-9 p-1" /></Field>
           {object.type === "rect" && <Field label="Corner radius"><Input type="number" value={object.rx ?? 0} onChange={(e) => onChange({ rx: Number(e.target.value) })} /></Field>}
         </>
       )}
@@ -325,6 +390,11 @@ function ObjectPanel({
       </div>
     </div>
   )
+}
+
+/** <input type="color"> only accepts #rrggbb; older designs may hold a CSS variable, which would render as black. */
+function toHex(value: string | undefined, fallback: string): string {
+  return value && /^#[0-9a-fA-F]{6}$/.test(value) ? value : fallback
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {

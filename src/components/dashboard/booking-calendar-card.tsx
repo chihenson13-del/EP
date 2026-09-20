@@ -1,3 +1,4 @@
+import { calendarDayOf } from "@/lib/timezone"
 import Link from "next/link"
 import { format } from "date-fns"
 import { CalendarDays, ArrowRight } from "lucide-react"
@@ -33,7 +34,7 @@ export function BookingCalendarCard({ unlimited, upcoming }: { unlimited: boolea
         <div className="space-y-1.5">
           {upcoming.map((e) => (
             <div key={e.id} className="text-xs flex items-baseline gap-2">
-              <span className="text-muted-foreground shrink-0">{format(new Date(e.date), "MMM d")}</span>
+              <span className="text-muted-foreground shrink-0">{format(calendarDayOf(e.date), "MMM d")}</span>
               <span className="truncate font-medium">{e.name}</span>
             </div>
           ))}

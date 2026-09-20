@@ -1,9 +1,13 @@
+import { formatDate } from "@/lib/timezone"
+import { requireAdmin } from "@/lib/session"
 import { db } from "@/lib/db"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 
 export default async function AdminUsersPage() {
+  await requireAdmin()
   const users = await db.user.findMany({
+    relationLoadStrategy: "join",
     include: {
       _count: { select: { events: true, purchases: true } },
       entitlements: { where: { status: "ACTIVE" }, include: { plan: true } },
@@ -38,7 +42,7 @@ export default async function AdminUsersPage() {
                 <TableCell className="space-x-1">
                   {u.entitlements.length === 0 ? <span className="text-muted-foreground text-sm">—</span> : u.entitlements.map((e) => <Badge key={e.id} variant="outline">{e.plan.name}</Badge>)}
                 </TableCell>
-                <TableCell className="text-sm text-muted-foreground">{new Date(u.createdAt).toLocaleDateString()}</TableCell>
+                <TableCell className="text-sm text-muted-foreground">{formatDate(u.createdAt)}</TableCell>
               </TableRow>
             ))}
           </TableBody>

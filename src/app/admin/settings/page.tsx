@@ -1,8 +1,10 @@
-import { getPlatformSettings } from "@/actions/platform-settings"
+import { requireAdmin } from "@/lib/session"
+import { getDisplayPaymentSettings } from "@/lib/platform-settings"
 import { PlatformPaymentSettingsForm } from "@/components/admin/platform-payment-settings-form"
 
 export default async function AdminSettingsPage() {
-  const settings = await getPlatformSettings()
+  await requireAdmin()
+  const settings = await getDisplayPaymentSettings()
 
   return (
     <div className="space-y-6 max-w-xl">

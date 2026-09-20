@@ -12,6 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 
+import { safe } from "@/lib/safe-action"
 const TARGET_FIELDS = [
   { key: "firstName", label: "First Name", required: true },
   { key: "lastName", label: "Last Name", required: false },
@@ -95,7 +96,7 @@ export default function ImportGuestsPage({ params }: { params: Promise<{ eventId
       phone: mapping.phone ? r[mapping.phone] : undefined,
       category: mapping.category ? r[mapping.category] : undefined,
     }))
-    const res = await importGuests(eventId, mapped)
+    const res = await safe(importGuests(eventId, mapped))
     setImporting(false)
     if (!res.ok) {
       toast.error(res.error)

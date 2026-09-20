@@ -1,24 +1,21 @@
-import { notFound } from "next/navigation"
-import { requireUser } from "@/lib/session"
+import { getEventContext } from "@/lib/event-access"
 import { db } from "@/lib/db"
 import { getEventTypeConfig } from "@/lib/event-types"
 import { SeatingEditor } from "@/components/seating/seating-editor"
 
 export default async function SeatingPage({ params }: { params: Promise<{ eventId: string }> }) {
-  await requireUser()
   const { eventId } = await params
+  const { event } = await getEventContext(eventId)
 
-  const event = await db.event.findUnique({ where: { id: eventId } })
-  if (!event) notFound()
-
-  let floorPlan = await db.floorPlan.findUnique({ where: { eventId } })
-  if (!floorPlan) floorPlan = await db.floorPlan.create({ data: { eventId } })
-
-  const [tables, floorObjects, guests] = await Promise.all([
-    db.table.findMany({ where: { eventId }, include: { chairs: { include: { guest: true }, orderBy: { seatNumber: "asc" } } }, orderBy: { createdAt: "asc" } }),
+  const [existingPlan, tables, floorObjects, guests] = await Promise.all([
+    db.floorPlan.findUnique({ where: { eventId } }),
+    db.table.findMany({ relationLoadStrategy: "join", where: { eventId }, include: { chairs: { include: { guest: true }, orderBy: { seatNumber: "asc" } } }, orderBy: { createdAt: "asc" } }),
     db.floorObject.findMany({ where: { eventId } }),
-    db.guest.findMany({ where: { eventId }, select: { id: true, firstName: true, lastName: true, rsvpStatus: true, chair: { select: { id: true } } }, orderBy: { firstName: "asc" } }),
+    db.guest.findMany({ relationLoadStrategy: "join", where: { eventId }, select: { id: true, firstName: true, lastName: true, rsvpStatus: true, chair: { select: { id: true } } }, orderBy: { firstName: "asc" } }),
   ])
+
+  // New events get their floor plan at creation; only older events need it created on first visit.
+  const floorPlan = existingPlan ?? (await db.floorPlan.upsert({ where: { eventId }, update: {}, create: { eventId } }))
 
   const typeConfig = getEventTypeConfig(event.type)
 

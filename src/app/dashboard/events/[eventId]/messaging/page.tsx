@@ -1,18 +1,15 @@
-import { notFound } from "next/navigation"
-import { requireUser } from "@/lib/session"
+import { getEventContext } from "@/lib/event-access"
 import { db } from "@/lib/db"
 import { hasFeature, FEATURES } from "@/lib/entitlements"
 import { MessagingConsole } from "@/components/messaging/messaging-console"
 
 export default async function MessagingPage({ params }: { params: Promise<{ eventId: string }> }) {
-  const user = await requireUser()
   const { eventId } = await params
-  const event = await db.event.findUnique({ where: { id: eventId }, select: { id: true, name: true } })
-  if (!event) notFound()
+  const { user } = await getEventContext(eventId)
 
   const [guests, logs, canSms] = await Promise.all([
     db.guest.findMany({ where: { eventId }, select: { id: true, firstName: true, lastName: true, email: true, phone: true, rsvpStatus: true }, orderBy: { firstName: "asc" } }),
-    db.messageLog.findMany({ where: { eventId }, include: { guest: true }, orderBy: { createdAt: "desc" }, take: 100 }),
+    db.messageLog.findMany({ relationLoadStrategy: "join", where: { eventId }, include: { guest: { select: { firstName: true, lastName: true, email: true, phone: true } } }, orderBy: { createdAt: "desc" }, take: 100 }),
     hasFeature(user.id, eventId, FEATURES.SMS_MESSAGING),
   ])
 

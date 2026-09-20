@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { toast } from "sonner"
 import {
   ZoomIn, ZoomOut, Maximize, Grid3x3, Undo2, Redo2, Trash2, Copy, Lock, LockOpen, Plus,
@@ -20,6 +20,8 @@ import { ObjectNode } from "./object-node"
 import type { TableData, FloorObjectData, GuestOption, Selection } from "./types"
 import type { TableShape, FloorObjectType, ChairStyle, SeatStatus } from "@prisma/client"
 
+import { safe } from "@/lib/safe-action"
+import { useSingleFlight } from "@/lib/use-single-flight"
 type FloorPlanData = { width: number; height: number; gridSize: number; snapToGrid: boolean; backgroundColor: string }
 type SeatingPreset = { key: string; label: string }
 
@@ -59,35 +61,49 @@ export function SeatingEditor({
   const redoRef = useRef<{ tables: TableData[]; objects: FloorObjectData[] }[]>([])
   const dragRef = useRef<null | { kind: "table" | "object" | "chair"; id: string; tableId?: string; startSvg: { x: number; y: number }; startPos: { x: number; y: number }; tableRotation?: number }>(null)
 
+  // Latest state for handlers that must stay referentially stable (so memoised nodes don't re-render
+  // on every mouse move). State is only ever replaced, never mutated, so history can hold references.
+  const tablesRef = useRef(tables)
+  const objectsRef = useRef(objects)
+  useEffect(() => {
+    tablesRef.current = tables
+    objectsRef.current = objects
+  })
+  const moveFrame = useRef<number | null>(null)
+  const lastPointer = useRef<{ x: number; y: number } | null>(null)
+
   const snapshot = useCallback(() => {
-    historyRef.current.push({ tables: structuredClone(tables), objects: structuredClone(objects) })
+    historyRef.current.push({ tables: tablesRef.current, objects: objectsRef.current })
     if (historyRef.current.length > 50) historyRef.current.shift()
     redoRef.current = []
-  }, [tables, objects])
+  }, [])
 
-  async function syncAll(nextTables: TableData[], nextObjects: FloorObjectData[]) {
-    await bulkSyncLayout(eventId, {
-      tables: nextTables.map((t) => ({ id: t.id, x: t.x, y: t.y, rotation: t.rotation })),
-      objects: nextObjects.map((o) => ({ id: o.id, x: o.x, y: o.y, rotation: o.rotation, width: o.width, height: o.height })),
-    })
+  /** Persist positions. Undo/redo passes the whole layout; a drag passes only the item that moved. */
+  const once = useSingleFlight()
+  async function syncLayout(layout: { tables: TableData[]; objects: FloorObjectData[] }) {
+    const result = await safe(bulkSyncLayout(eventId, {
+      tables: layout.tables.map((t) => ({ id: t.id, x: t.x, y: t.y, rotation: t.rotation })),
+      objects: layout.objects.map((o) => ({ id: o.id, x: o.x, y: o.y, rotation: o.rotation, width: o.width, height: o.height })),
+    }))
+    if (!result.ok) toast.error(`Your layout change couldn't be saved: ${result.error}`)
   }
 
   function undo() {
     const prev = historyRef.current.pop()
     if (!prev) return
-    redoRef.current.push({ tables: structuredClone(tables), objects: structuredClone(objects) })
+    redoRef.current.push({ tables, objects })
     setTables(prev.tables)
     setObjects(prev.objects)
-    syncAll(prev.tables, prev.objects)
+    syncLayout(prev)
   }
 
   function redo() {
     const next = redoRef.current.pop()
     if (!next) return
-    historyRef.current.push({ tables: structuredClone(tables), objects: structuredClone(objects) })
+    historyRef.current.push({ tables, objects })
     setTables(next.tables)
     setObjects(next.objects)
-    syncAll(next.tables, next.objects)
+    syncLayout(next)
   }
 
   function toSvgPoint(clientX: number, clientY: number) {
@@ -98,7 +114,7 @@ export function SeatingEditor({
     return pt.matrixTransform(svg.getScreenCTM()!.inverse())
   }
 
-  const onPointerDownTable = useCallback((table: TableData) => (e: React.PointerEvent) => {
+  const onPointerDownTable = useCallback((table: TableData, e: React.PointerEvent) => {
     ;(e.target as Element).setPointerCapture(e.pointerId)
     if (table.locked) { setSelection({ kind: "table", id: table.id }); return }
     snapshot()
@@ -107,7 +123,7 @@ export function SeatingEditor({
     setSelection({ kind: "table", id: table.id })
   }, [snapshot])
 
-  const onPointerDownObject = useCallback((obj: FloorObjectData) => (e: React.PointerEvent) => {
+  const onPointerDownObject = useCallback((obj: FloorObjectData, e: React.PointerEvent) => {
     ;(e.target as Element).setPointerCapture(e.pointerId)
     if (obj.locked) { setSelection({ kind: "object", id: obj.id }); return }
     snapshot()
@@ -116,39 +132,70 @@ export function SeatingEditor({
     setSelection({ kind: "object", id: obj.id })
   }, [snapshot])
 
-  const onPointerDownChair = useCallback((table: TableData, chairId: string) => (e: React.PointerEvent) => {
+  const onPointerDownChair = useCallback((table: TableData, chairId: string, e: React.PointerEvent) => {
     ;(e.target as Element).setPointerCapture(e.pointerId)
-    const chair = table.chairs.find((c) => c.id === chairId)!
+    const chair = table.chairs.find((c) => c.id === chairId)
+    if (!chair) return
     snapshot()
     const p = toSvgPoint(e.clientX, e.clientY)
     dragRef.current = { kind: "chair", id: chairId, tableId: table.id, startSvg: { x: p.x, y: p.y }, startPos: { x: chair.x, y: chair.y }, tableRotation: table.rotation }
     setSelection({ kind: "chair", id: chairId, tableId: table.id })
   }, [snapshot])
 
-  function handlePointerMove(e: React.PointerEvent) {
+  /** Apply the latest pointer position to the dragged item. Runs at most once per animation frame. */
+  function applyDrag() {
+    moveFrame.current = null
     const drag = dragRef.current
-    if (!drag) return
-    const p = toSvgPoint(e.clientX, e.clientY)
+    const pointer = lastPointer.current
+    if (!drag || !pointer) return
+    const p = toSvgPoint(pointer.x, pointer.y)
     const dx = p.x - drag.startSvg.x
     const dy = p.y - drag.startSvg.y
 
     if (drag.kind === "table") {
-      setTables((prev) => prev.map((t) => (t.id === drag.id ? { ...t, x: drag.startPos.x + dx, y: drag.startPos.y + dy } : t)))
+      const next = tablesRef.current.map((t) => (t.id === drag.id ? { ...t, x: drag.startPos.x + dx, y: drag.startPos.y + dy } : t))
+      tablesRef.current = next
+      setTables(next)
     } else if (drag.kind === "object") {
-      setObjects((prev) => prev.map((o) => (o.id === drag.id ? { ...o, x: drag.startPos.x + dx, y: drag.startPos.y + dy } : o)))
+      const next = objectsRef.current.map((o) => (o.id === drag.id ? { ...o, x: drag.startPos.x + dx, y: drag.startPos.y + dy } : o))
+      objectsRef.current = next
+      setObjects(next)
     } else if (drag.kind === "chair") {
       const local = rotatePoint(dx, dy, -(drag.tableRotation ?? 0))
-      setTables((prev) => prev.map((t) => t.id !== drag.tableId ? t : {
+      const next = tablesRef.current.map((t) => t.id !== drag.tableId ? t : {
         ...t,
         chairs: t.chairs.map((c) => c.id === drag.id ? { ...c, x: drag.startPos.x + local.x, y: drag.startPos.y + local.y } : c),
-      }))
+      })
+      tablesRef.current = next
+      setTables(next)
     }
   }
 
-  function handlePointerUp() {
+  function handlePointerMove(e: React.PointerEvent) {
     if (!dragRef.current) return
+    lastPointer.current = { x: e.clientX, y: e.clientY }
+    if (moveFrame.current === null) moveFrame.current = requestAnimationFrame(applyDrag)
+  }
+
+  async function handlePointerUp() {
+    const drag = dragRef.current
+    if (!drag) return
+    if (moveFrame.current !== null) cancelAnimationFrame(moveFrame.current)
+    applyDrag()
     dragRef.current = null
-    syncAll(tables, objects)
+
+    // Save only what moved, not the whole floor plan.
+    if (drag.kind === "table") {
+      await syncLayout({ tables: tablesRef.current.filter((t) => t.id === drag.id), objects: [] })
+    } else if (drag.kind === "object") {
+      await syncLayout({ tables: [], objects: objectsRef.current.filter((o) => o.id === drag.id) })
+    } else {
+      const chair = tablesRef.current.find((t) => t.id === drag.tableId)?.chairs.find((c) => c.id === drag.id)
+      if (chair) {
+        const result = await safe(updateChair(eventId, chair.id, { x: chair.x, y: chair.y }))
+        if (!result.ok) toast.error(`The seat position couldn't be saved: ${result.error}`)
+      }
+    }
   }
 
   function handleBackgroundPointerDown(e: React.PointerEvent) {
@@ -187,43 +234,55 @@ export function SeatingEditor({
     setViewBox({ x: 0, y: 0, w: floorPlan.width, h: floorPlan.height })
   }
 
-  async function handleAddTable(shape: TableShape) {
-    const result = await createTable(eventId, shape, viewBox.x + viewBox.w / 2, viewBox.y + viewBox.h / 2)
+  function handleAddTable(shape: TableShape) {
+    return once(async () => {
+    const result = await safe(createTable(eventId, shape, viewBox.x + viewBox.w / 2, viewBox.y + viewBox.h / 2))
     if (!result.ok) {
         toast.error(result.error)
         return
       }
     const table = await fetchFreshTable(result.data.id)
     if (table) setTables((prev) => [...prev, table])
+      })
   }
 
-  async function handleAddPreset(preset: SeatingPreset) {
-    const result = await createTable(eventId, "ROUND_MEDIUM", viewBox.x + viewBox.w / 2, viewBox.y + viewBox.h / 2)
+  function handleAddPreset(preset: SeatingPreset) {
+    return once(async () => {
+    const result = await safe(createTable(eventId, "ROUND_MEDIUM", viewBox.x + viewBox.w / 2, viewBox.y + viewBox.h / 2))
     if (!result.ok) {
         toast.error(result.error)
         return
       }
-    await updateTableSettings(eventId, result.data.id, { name: preset.label })
+    const renamed = await safe(updateTableSettings(eventId, result.data.id, { name: preset.label }))
+    if (!renamed.ok) toast.error(renamed.error)
     const table = await fetchFreshTable(result.data.id)
     if (table) setTables((prev) => [...prev, { ...table, name: preset.label }])
+      })
   }
 
   async function fetchFreshTable(id: string): Promise<TableData | null> {
     // Re-derive the created table+chairs from the latest local createTable defaults (no extra round-trip needed
     // since createTable already computed geometry server-side); we refetch via a light client call instead.
-    const res = await fetch(`/api/events/${eventId}/tables/${id}`)
-    if (!res.ok) return null
-    return res.json()
+    try {
+      const res = await fetch(`/api/events/${eventId}/tables/${id}`)
+      if (!res.ok) throw new Error("bad response")
+      return (await res.json()) as TableData
+    } catch {
+      toast.error("The table was saved but couldn't be displayed. Refresh the page to see it.")
+      return null
+    }
   }
 
-  async function handleAddObject(type: FloorObjectType) {
+  function handleAddObject(type: FloorObjectType) {
+    return once(async () => {
     const size = FLOOR_OBJECT_DEFAULT_SIZE[type]
-    const result = await createFloorObject(eventId, type, viewBox.x + viewBox.w / 2, viewBox.y + viewBox.h / 2, size.width, size.height)
+    const result = await safe(createFloorObject(eventId, type, viewBox.x + viewBox.w / 2, viewBox.y + viewBox.h / 2, size.width, size.height))
     if (!result.ok) {
         toast.error(result.error)
         return
       }
     setObjects((prev) => [...prev, { id: result.data.id, type, label: FLOOR_OBJECT_LABELS[type], x: viewBox.x + viewBox.w / 2, y: viewBox.y + viewBox.h / 2, width: size.width, height: size.height, rotation: 0, color: "#d9d2c7", locked: false }])
+      })
   }
 
   const selectedTable = selection?.kind === "table" ? tables.find((t) => t.id === selection.id) : selection?.kind === "chair" ? tables.find((t) => t.id === selection.tableId) : undefined
@@ -244,7 +303,7 @@ export function SeatingEditor({
   async function patchSelectedTable(patch: Parameters<typeof updateTableSettings>[2]) {
     if (!selectedTable) return
     snapshot()
-    const result = await updateTableSettings(eventId, selectedTable.id, patch)
+    const result = await safe(updateTableSettings(eventId, selectedTable.id, patch))
     if (!result.ok) {
         toast.error(result.error)
         return
@@ -255,13 +314,17 @@ export function SeatingEditor({
 
   async function patchSelectedChair(patch: { style?: ChairStyle; status?: SeatStatus }) {
     if (!selectedChair) return
-    await updateChair(eventId, selectedChair.id, patch)
+    const result = await safe(updateChair(eventId, selectedChair.id, patch))
+    if (!result.ok) {
+      toast.error(result.error)
+      return
+    }
     setTables((prev) => prev.map((t) => ({ ...t, chairs: t.chairs.map((c) => (c.id === selectedChair.id ? { ...c, ...patch } : c)) })))
   }
 
   async function assignGuest(guestId: string | null) {
     if (!selectedChair) return
-    const result = await assignGuestToChair(eventId, selectedChair.id, guestId)
+    const result = await safe(assignGuestToChair(eventId, selectedChair.id, guestId))
     if (!result.ok) {
         toast.error(result.error)
         return
@@ -280,25 +343,48 @@ export function SeatingEditor({
 
   async function handleDeleteSelection() {
     if (selection?.kind === "table") {
-      await deleteTable(eventId, selection.id)
+      const result = await safe(deleteTable(eventId, selection.id))
+      if (!result.ok) return void toast.error(result.error)
       setTables((prev) => prev.filter((t) => t.id !== selection.id))
     } else if (selection?.kind === "object") {
-      await deleteFloorObject(eventId, selection.id)
+      const result = await safe(deleteFloorObject(eventId, selection.id))
+      if (!result.ok) return void toast.error(result.error)
       setObjects((prev) => prev.filter((o) => o.id !== selection.id))
     }
     setSelection(null)
   }
 
-  async function handleDuplicateTable() {
+  function handleDuplicateTable() {
+    return once(async () => {
     if (!selectedTable) return
-    const result = await duplicateTable(eventId, selectedTable.id)
+    const result = await safe(duplicateTable(eventId, selectedTable.id))
     if (!result.ok) {
         toast.error(result.error)
         return
       }
     const fresh = await fetchFreshTable(result.data.id)
     if (fresh) setTables((prev) => [...prev, fresh])
+      })
   }
+
+  const onGuestDrop = useCallback(async (tableId: string, chairId: string, guestId: string) => {
+    setSelection({ kind: "chair", id: chairId, tableId })
+    const result = await safe(assignGuestToChair(eventId, chairId, guestId))
+    if (!result.ok) {
+      toast.error(result.error)
+      return
+    }
+    const guest = guests.find((g) => g.id === guestId)
+    setTables((prev) => prev.map((tb) => ({
+      ...tb,
+      chairs: tb.chairs.map((c) => {
+        if (c.id === chairId) return { ...c, guestId, guest: guest ? { id: guest.id, firstName: guest.firstName, lastName: guest.lastName } : null, status: "ASSIGNED" }
+        if (c.guestId === guestId) return { ...c, guestId: null, guest: null, status: "EMPTY" }
+        return c
+      }),
+    })))
+    toast.success("Guest seated.")
+  }, [eventId, guests])
 
   const totalCapacity = tables.reduce((sum, t) => sum + t.capacity, 0)
   const assignedCount = tables.reduce((sum, t) => sum + t.chairs.filter((c) => c.guestId).length, 0)
@@ -396,7 +482,7 @@ export function SeatingEditor({
               key={o.id}
               object={o}
               selected={selection?.kind === "object" && selection.id === o.id}
-              onPointerDown={onPointerDownObject(o)}
+              onPointerDown={onPointerDownObject}
             />
           ))}
 
@@ -406,26 +492,9 @@ export function SeatingEditor({
               table={t}
               selected={selection?.kind === "table" && selection.id === t.id}
               selectedChairId={selection?.kind === "chair" ? selection.id : null}
-              onTablePointerDown={onPointerDownTable(t)}
-              onChairPointerDown={(chairId, e) => onPointerDownChair(t, chairId)(e)}
-              onGuestDrop={async (chairId, guestId) => {
-                  setSelection({ kind: "chair", id: chairId, tableId: t.id })
-                  const result = await assignGuestToChair(eventId, chairId, guestId)
-                  if (!result.ok) {
-        toast.error(result.error)
-        return
-      }
-                  const guest = guests.find((g) => g.id === guestId)
-                  setTables((prev) => prev.map((tb) => ({
-                    ...tb,
-                    chairs: tb.chairs.map((c) => {
-                      if (c.id === chairId) return { ...c, guestId, guest: guest ? { id: guest.id, firstName: guest.firstName, lastName: guest.lastName } : null, status: "ASSIGNED" }
-                      if (c.guestId === guestId) return { ...c, guestId: null, guest: null, status: "EMPTY" }
-                      return c
-                    }),
-                  })))
-                  toast.success("Guest seated.")
-                }}
+              onTablePointerDown={onPointerDownTable}
+              onChairPointerDown={onPointerDownChair}
+              onGuestDrop={onGuestDrop}
             />
           ))}
         </svg>
@@ -452,7 +521,7 @@ export function SeatingEditor({
         )}
         {selectedObject && (
           <ObjectSettingsPanel object={selectedObject} onPatch={async (patch) => {
-            await updateFloorObject(eventId, selectedObject.id, patch)
+            await safe(updateFloorObject(eventId, selectedObject.id, patch))
             setObjects((prev) => prev.map((o) => (o.id === selectedObject.id ? { ...o, ...patch } : o)))
           }} />
         )}

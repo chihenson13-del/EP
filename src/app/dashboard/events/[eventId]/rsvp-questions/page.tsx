@@ -1,15 +1,11 @@
-import { notFound } from "next/navigation"
-import { requireUser } from "@/lib/session"
+import { getEventContext } from "@/lib/event-access"
 import { db } from "@/lib/db"
 import { getEventLimits } from "@/lib/entitlements"
 import { QuestionsBuilder } from "@/components/guests/questions-builder"
 
 export default async function RsvpQuestionsPage({ params }: { params: Promise<{ eventId: string }> }) {
-  const user = await requireUser()
   const { eventId } = await params
-
-  const event = await db.event.findUnique({ where: { id: eventId }, select: { id: true } })
-  if (!event) notFound()
+  const { user } = await getEventContext(eventId)
 
   const [questions, limits] = await Promise.all([
     db.customQuestion.findMany({ where: { eventId }, orderBy: { order: "asc" } }),

@@ -151,3 +151,35 @@
   0%, 100% { transform: scaleY(0.4); }
   50% { transform: scaleY(1); }
 }
+
+/*
+ * Touch ergonomics. Taps respond immediately (no double-tap-to-zoom delay), and on touch screens the
+ * compact 28-32px desktop controls grow to a comfortable ~40px hit area. Desktop sizing is unchanged.
+ */
+a, button, [role="button"], [role="tab"], [role="switch"], [role="checkbox"], summary, label, select {
+  touch-action: manipulation;
+}
+@media (pointer: coarse) {
+  /* Buttons rendered as Radix triggers (asChild) have their data-slot replaced, so also match on the
+     data-variant/data-size attributes every Button carries. */
+  [data-slot="button"]:not([data-size="xs"]),
+  [data-variant][data-size]:not([data-size="xs"]) {
+    min-height: 2.5rem;
+  }
+  [data-slot="button"][data-size^="icon"],
+  [data-variant][data-size^="icon"] {
+    min-width: 2.5rem;
+  }
+  [data-slot="tabs-trigger"] {
+    min-height: 2.25rem;
+  }
+  /* Matched by element type: FormControl/Slot wrappers replace data-slot on the input itself. */
+  input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="hidden"]):not([type="range"]),
+  textarea,
+  [role="combobox"],
+  [data-slot="input"],
+  [data-slot="select-trigger"] {
+    min-height: 2.5rem;
+    font-size: 16px; /* prevents iOS Safari zooming the page when a field is focused */
+  }
+}

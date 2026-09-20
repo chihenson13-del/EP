@@ -1,5 +1,6 @@
 "use server"
 
+import { formatDate } from "@/lib/timezone"
 import { revalidatePath } from "next/cache"
 import { db } from "@/lib/db"
 import { requireUser } from "@/lib/session"
@@ -49,7 +50,7 @@ export async function sendMessage(input: SendMessageInput): Promise<ActionResult
     const filledBody = fillMessageVariables(d.body, {
       name: guest.firstName,
       event: event.name,
-      date: event.date ? new Date(event.date).toLocaleDateString() : "",
+      date: event.date ? formatDate(event.date) : "",
       time: event.timeLabel ?? "",
       venue: event.venueName ?? "",
       rsvp_link: rsvpUrl,

@@ -1,5 +1,6 @@
 "use client"
 
+import { appNow } from "@/lib/timezone"
 import { useMemo, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
@@ -29,10 +30,11 @@ import { CreateBookingDialog } from "./create-booking-dialog"
 import { importIcsCalendar } from "@/actions/calendar"
 import type { CalendarEvent, ImportedEvent, CalendarView, StatusFilter } from "./types"
 
+import { safe } from "@/lib/safe-action"
 export function BookingCalendar({ events, importedEvents }: { events: CalendarEvent[]; importedEvents: ImportedEvent[] }) {
   const router = useRouter()
   const [view, setView] = useState<CalendarView>("month")
-  const [anchorDate, setAnchorDate] = useState(new Date())
+  const [anchorDate, setAnchorDate] = useState(() => appNow())
   const [search, setSearch] = useState("")
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("ALL")
   const [typeFilter, setTypeFilter] = useState<string>("ALL")
@@ -66,7 +68,7 @@ export function BookingCalendar({ events, importedEvents }: { events: CalendarEv
 
   // Summary counts always come from the full, unfiltered event set — real DB-derived numbers.
   const summary = useMemo(() => {
-    const now = new Date()
+    const now = appNow()
     const monthStart = startOfMonth(now)
     const monthEnd = endOfMonth(now)
     const in30Days = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000)
@@ -82,16 +84,16 @@ export function BookingCalendar({ events, importedEvents }: { events: CalendarEv
     return { thisMonthConfirmed, upcoming30, pending, completed }
   }, [allItems])
 
-  const todayItems = useMemo(() => allItems.filter((it) => itemTouchesDay(it, new Date())), [allItems])
+  const todayItems = useMemo(() => allItems.filter((it) => itemTouchesDay(it, appNow())), [allItems])
 
   const upcomingEvents = useMemo(() => {
-    const now = new Date()
+    const now = appNow()
     return allItems
       .filter((it): it is Extract<CalendarItem, { kind: "event" }> => it.kind === "event" && it.bookingStatus === "CONFIRMED" && it.start >= now)
       .slice(0, 5)
   }, [allItems])
 
-  function goToday() { setAnchorDate(new Date()) }
+  function goToday() { setAnchorDate(appNow()) }
   function goPrev() {
     setAnchorDate((d) => (view === "month" ? subMonths(d, 1) : view === "week" ? subWeeks(d, 1) : subDays(d, 1)))
   }
@@ -106,7 +108,7 @@ export function BookingCalendar({ events, importedEvents }: { events: CalendarEv
   async function handleImportFile(file: File) {
     setImporting(true)
     const text = await file.text()
-    const result = await importIcsCalendar(text)
+    const result = await safe(importIcsCalendar(text))
     setImporting(false)
     if (!result.ok) {
       toast.error(result.error)

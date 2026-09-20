@@ -11,6 +11,7 @@ export async function submitRsvp(input: RsvpSubmitInput): Promise<ActionResult<{
   const d = parsed.data
 
   const guest = await db.guest.findUnique({
+    relationLoadStrategy: "join",
     where: { id: d.guestId },
     include: { event: { include: { customQuestions: true } } },
   })

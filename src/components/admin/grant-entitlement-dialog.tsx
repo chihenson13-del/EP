@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
+import { safe } from "@/lib/safe-action"
 export function GrantEntitlementDialog({
   open, onOpenChange, users, events,
 }: { open: boolean; onOpenChange: (o: boolean) => void; users: { id: string; name: string | null; email: string }[]; events: { id: string; name: string; ownerId: string }[] }) {
@@ -25,7 +26,7 @@ export function GrantEntitlementDialog({
       return
     }
     startTransition(async () => {
-      const result = await grantEntitlementManually({ userId, planKey, eventId: planKey === "UNLIMITED" ? undefined : eventId, reason })
+      const result = await safe(grantEntitlementManually({ userId, planKey, eventId: planKey === "UNLIMITED" ? undefined : eventId, reason }))
       if (!result.ok) {
         toast.error(result.error)
         return

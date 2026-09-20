@@ -2,7 +2,10 @@
 // Source of truth for all persisted application data.
 
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  // Lets a query with nested relations run as ONE SQL statement (relationLoadStrategy: "join") instead of a
+  // chain of dependent queries — each of which costs a full database round trip.
+  previewFeatures = ["relationJoins"]
 }
 
 datasource db {
@@ -142,7 +145,7 @@ model Event {
   date        DateTime?
   endDate     DateTime?
   timeLabel   String?
-  timezone    String      @default("Asia/Manila")
+  timezone    String      @default("Asia/Singapore")
 
   venueName   String?
   address     String?
@@ -227,6 +230,7 @@ model EventCollaborator {
   respondedAt   DateTime?
 
   @@index([eventId])
+  @@index([userId, status])
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -373,6 +377,8 @@ model PlusOne {
   guest          Guest   @relation(fields: [guestId], references: [id], onDelete: Cascade)
   name           String?
   mealPreference String?
+
+  @@index([guestId])
 }
 
 enum QuestionType {
@@ -606,6 +612,7 @@ model MessageLog {
   createdAt   DateTime       @default(now())
 
   @@index([eventId])
+  @@index([eventId, createdAt])
   @@index([guestId])
 }
 
@@ -758,6 +765,7 @@ model Entitlement {
   revokedAt    DateTime?
 
   @@index([userId])
+  @@index([userId, status])
   @@index([eventId])
 }
 

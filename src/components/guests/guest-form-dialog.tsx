@@ -13,6 +13,8 @@ import { Switch } from "@/components/ui/switch"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 
+import { safe } from "@/lib/safe-action"
+import { useSingleFlight } from "@/lib/use-single-flight"
 type GuestLike = {
   id?: string
   firstName?: string
@@ -45,9 +47,11 @@ export function GuestFormDialog({
     if (open) form.reset(guest ? toFormValues(guest) : emptyValues())
   }, [open, guest, form])
 
-  async function onSubmit(values: GuestInput) {
+  const once = useSingleFlight()
+  function onSubmit(values: GuestInput) {
+    return once(async () => {
     setLoading(true)
-    const result = await upsertGuest(eventId, values)
+    const result = await safe(upsertGuest(eventId, values))
     setLoading(false)
     if (!result.ok) {
       toast.error(result.error)
@@ -55,6 +59,7 @@ export function GuestFormDialog({
     }
     toast.success(guest?.id ? "Guest updated." : "Guest added.")
     onOpenChange(false)
+      })
   }
 
   return (

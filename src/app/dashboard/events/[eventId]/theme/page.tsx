@@ -1,17 +1,14 @@
-import { notFound } from "next/navigation"
-import { requireUser } from "@/lib/session"
+import { getEventContext } from "@/lib/event-access"
 import { db } from "@/lib/db"
 import { hasFeature, FEATURES } from "@/lib/entitlements"
 import { ThemePicker } from "@/components/content/theme-picker"
 
 export default async function ThemePage({ params }: { params: Promise<{ eventId: string }> }) {
-  const user = await requireUser()
   const { eventId } = await params
+  const { user } = await getEventContext(eventId)
 
-  const event = await db.event.findUnique({ where: { id: eventId }, include: { page: true } })
-  if (!event) notFound()
-
-  const [themes, canUsePremiumThemes, canCustomize] = await Promise.all([
+  const [page, themes, canUsePremiumThemes, canCustomize] = await Promise.all([
+    db.eventPage.findUnique({ where: { eventId } }),
     db.eventTheme.findMany({ orderBy: { name: "asc" } }),
     hasFeature(user.id, eventId, FEATURES.PREMIUM_THEMES),
     hasFeature(user.id, eventId, FEATURES.ADVANCED_THEME_CUSTOMIZATION),
@@ -26,9 +23,9 @@ export default async function ThemePage({ params }: { params: Promise<{ eventId:
       <ThemePicker
         eventId={eventId}
         themes={JSON.parse(JSON.stringify(themes))}
-        currentThemeId={event.page?.themeId ?? null}
-        currentColors={(event.page?.colors as Record<string, string>) ?? {}}
-        currentFontPairKey={(event.page?.fonts as { pairKey?: string } | null)?.pairKey ?? null}
+        currentThemeId={page?.themeId ?? null}
+        currentColors={(page?.colors as Record<string, string>) ?? {}}
+        currentFontPairKey={(page?.fonts as { pairKey?: string } | null)?.pairKey ?? null}
         canUsePremiumThemes={canUsePremiumThemes}
         canCustomize={canCustomize}
       />

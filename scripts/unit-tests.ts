@@ -1,0 +1,110 @@
+import assert from "node:assert/strict"
+import { isSafeImageUrl, safeHttpUrl, isHttpUrl } from "../src/lib/image-url"
+import { csvCell, toCsv } from "../src/lib/csv"
+import { escapeHtml, messageBodyToHtml, invitationTemplate } from "../src/lib/email-templates"
+import { updateEventSchema } from "../src/lib/validations/event"
+import { submitPurchaseSchema } from "../src/lib/validations/payment"
+import { sanitizeCanvas } from "../src/lib/design-canvas"
+import { formatDate, formatDateTime, calendarDayOf, singaporeLocalToInstant, appNow, APP_TIMEZONE } from "../src/lib/timezone"
+import { parseTimeLabel, getEventWindow, windowsOverlap, getBookingStatus } from "../src/lib/booking-calendar"
+
+let n = 0
+const t = (name: string, fn: () => void) => { fn(); n++; console.log("ok -", name) }
+
+t("javascript: URL is rejected as map link", () => assert.equal(isHttpUrl("javascript:alert(1)"), false))
+t("safeHttpUrl strips non-http", () => assert.equal(safeHttpUrl("javascript:alert(1)"), null))
+t("safeHttpUrl keeps https", () => assert.equal(safeHttpUrl(" https://maps.google.com/?q=x "), "https://maps.google.com/?q=x"))
+t("svg data URL rejected as image", () => assert.equal(isSafeImageUrl("data:image/svg+xml;base64,PHN2Zz48c2NyaXB0Pg=="), false))
+t("html data URL rejected as image", () => assert.equal(isSafeImageUrl("data:text/html;base64,PGh0bWw+"), false))
+t("png data URL accepted", () => assert.equal(isSafeImageUrl("data:image/png;base64,iVBORw0KGgo="), true))
+t("oversized data URL rejected", () => assert.equal(isSafeImageUrl("data:image/png;base64," + "A".repeat(7_000_001)), false))
+t("event schema rejects javascript: mapUrl", () => {
+  const r = updateEventSchema.safeParse({ eventId: "x", name: "Test event", type: "PARTY", mapUrl: "javascript:alert(1)" })
+  assert.equal(r.success, false)
+})
+t("event schema accepts https + empty mapUrl", () => {
+  assert.equal(updateEventSchema.safeParse({ eventId: "x", name: "Test event", type: "PARTY", mapUrl: "https://goo.gl/maps/abc" }).success, true)
+  assert.equal(updateEventSchema.safeParse({ eventId: "x", name: "Test event", type: "PARTY", mapUrl: "" }).success, true)
+  assert.equal(updateEventSchema.safeParse({ eventId: "x", name: "Test event", type: "PARTY" }).success, true)
+})
+t("payment schema rejects non-image proof", () => {
+  assert.equal(submitPurchaseSchema.safeParse({ planKey: "PREMIUM", eventId: "e", paymentReference: "R1", paymentMethod: "GCash", proofImageUrl: "javascript:alert(1)" }).success, false)
+  assert.equal(submitPurchaseSchema.safeParse({ planKey: "PREMIUM", eventId: "e", paymentReference: "R1", paymentMethod: "GCash", proofImageUrl: "" }).success, true)
+  assert.equal(submitPurchaseSchema.safeParse({ planKey: "PREMIUM", eventId: "e", paymentReference: "R1", paymentMethod: "GCash", proofImageUrl: "data:image/jpeg;base64,/9j/4AAQ" }).success, true)
+})
+t("csv formula injection is neutralised", () => {
+  assert.equal(csvCell("=HYPERLINK(\"http://evil\")"), "\"'=HYPERLINK(\"\"http://evil\"\")\"")
+  assert.equal(csvCell("+1234"), "'+1234")
+  assert.equal(csvCell("@SUM(A1)"), "'@SUM(A1)")
+  assert.equal(csvCell(5), "5")
+  assert.equal(csvCell("plain"), "plain")
+  assert.equal(toCsv([["a", "b,c"], [1, "d\"e"]]), 'a,"b,c"\n1,"d""e"')
+})
+t("escapeHtml escapes markup", () => assert.equal(escapeHtml(`<img src=x onerror="a">&'`), "&lt;img src=x onerror=&quot;a&quot;&gt;&amp;&#39;"))
+t("message body is escaped and newlines kept", () => assert.equal(messageBodyToHtml("<b>hi</b>\nyo"), "&lt;b&gt;hi&lt;/b&gt;<br/>yo"))
+t("invitation email escapes guest/event names", () => {
+  const html = invitationTemplate({ guestName: "<script>x</script>", eventName: "<b>Party</b>", rsvpUrl: "https://a.b/?x=1&y=\"2" })
+  assert.ok(!html.includes("<script>x</script>"))
+  assert.ok(!html.includes("<b>Party</b>"))
+  assert.ok(html.includes("&lt;script&gt;"))
+})
+t("time parsing", () => {
+  assert.deepEqual(parseTimeLabel("2:00 PM"), { hours: 14, minutes: 0 })
+  assert.deepEqual(parseTimeLabel("12 AM"), { hours: 0, minutes: 0 })
+  assert.deepEqual(parseTimeLabel("14:30"), { hours: 14, minutes: 30 })
+  assert.equal(parseTimeLabel("TBD"), null)
+  assert.equal(parseTimeLabel("25:00"), null)
+})
+t("conflict overlap logic", () => {
+  const d = new Date("2027-01-10T00:00:00Z")
+  const a = getEventWindow({ date: d, endDate: null, timeLabel: "3:00 PM" })!
+  const b = getEventWindow({ date: d, endDate: null, timeLabel: "4:00 PM" })!
+  const c = getEventWindow({ date: d, endDate: null, timeLabel: "9:00 AM" })!
+  assert.equal(windowsOverlap(a, b), true)
+  assert.equal(windowsOverlap(a, c), false)
+})
+t("booking status derivation", () => {
+  const future = new Date(Date.now() + 86400000 * 5), past = new Date(Date.now() - 86400000 * 5)
+  assert.equal(getBookingStatus({ status: "PUBLISHED", date: future }), "CONFIRMED")
+  assert.equal(getBookingStatus({ status: "PUBLISHED", date: past }), "COMPLETED")
+  assert.equal(getBookingStatus({ status: "DRAFT", date: future }), "PENDING")
+  assert.equal(getBookingStatus({ status: "ARCHIVED", date: future }), "CANCELLED")
+})
+t("design canvas: unknown object types are dropped, numbers clamped", () => {
+  const r = sanitizeCanvas({ objects: [
+    { id: "a", type: "text", x: 1e12, y: -1e12, width: 100, height: 40, rotation: 9999, zIndex: 0, text: "Hi", fontSize: 24 },
+    { id: "b", type: "script", x: 0, y: 0, width: 1, height: 1, rotation: 0, zIndex: 1 },
+  ] })
+  assert.equal(r.ok, true)
+  if (r.ok) {
+    assert.equal(r.data.objects.length, 1)
+    assert.equal(r.data.objects[0].x, 20000)
+    assert.equal(r.data.objects[0].rotation, 360)
+  }
+})
+t("design canvas: unsafe image sources and non-colours are refused", () => {
+  assert.equal(sanitizeCanvas({ objects: [{ id: "i", type: "image", x: 0, y: 0, width: 10, height: 10, rotation: 0, zIndex: 0, src: "javascript:alert(1)" }] }).ok, false)
+  assert.equal(sanitizeCanvas({ objects: [{ id: "i", type: "image", x: 0, y: 0, width: 10, height: 10, rotation: 0, zIndex: 0, src: "data:image/svg+xml;base64,PHN2Zz4=" }] }).ok, false)
+  const r = sanitizeCanvas({ objects: [{ id: "r", type: "rect", x: 0, y: 0, width: 10, height: 10, rotation: 0, zIndex: 0, fill: "red; background:url(x)" }] })
+  assert.equal(r.ok && r.data.objects[0].fill, undefined)
+  assert.equal(sanitizeCanvas({ objects: "nope" }).ok, false)
+  assert.equal(sanitizeCanvas({ objects: Array.from({ length: 201 }, (_, i) => ({ id: String(i), type: "rect" })) }).ok, false)
+})
+t("timezone: dates and times render in Asia/Singapore whatever the process timezone is", () => {
+  // 2027-03-14 20:00 UTC is already 04:00 on the 15th in Singapore.
+  assert.equal(formatDate("2027-03-14T20:00:00Z", { year: "numeric", month: "2-digit", day: "2-digit" }), "03/15/2027")
+  assert.equal(formatDateTime("2027-03-14T20:00:00Z", { hour: "numeric", minute: "2-digit", hour12: false }), "04:00")
+})
+t("timezone: a host-picked date (stored as UTC midnight) is the same calendar day for every viewer", () => {
+  const d = calendarDayOf("2027-03-14T00:00:00.000Z")
+  assert.deepEqual([d.getFullYear(), d.getMonth(), d.getDate()], [2027, 2, 14])
+})
+t("timezone: datetime-local input is read as Singapore time, not the viewer's", () => {
+  assert.equal(singaporeLocalToInstant("2027-03-14T16:00").toISOString(), "2027-03-14T08:00:00.000Z")
+})
+t("timezone: appNow reads Singapore wall-clock time", () => {
+  const now = appNow()
+  const sg = new Intl.DateTimeFormat("en-US", { timeZone: APP_TIMEZONE, hourCycle: "h23", hour: "numeric" }).format(new Date())
+  assert.equal(now.getHours(), Number(sg))
+})
+console.log(`\n${n} groups passed`)

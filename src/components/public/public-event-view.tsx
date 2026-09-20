@@ -1,5 +1,6 @@
 "use client"
 
+import { formatDate } from "@/lib/timezone"
 import { useMemo } from "react"
 import { Countdown } from "@/components/public/countdown"
 import { googleCalendarUrl, outlookCalendarUrl, icsFileContent } from "@/lib/calendar-links"
@@ -87,7 +88,7 @@ function SectionRenderer({
           {content.subheading && <p className="text-lg opacity-80">{content.subheading}</p>}
           {event.date && (
             <p className="mt-4 text-sm opacity-70">
-              {new Date(event.date).toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric", year: "numeric" })}
+              {formatDate(event.date, { weekday: "long", month: "long", day: "numeric", year: "numeric" })}
               {event.timeLabel ? ` · ${event.timeLabel}` : ""}
             </p>
           )}
@@ -150,7 +151,7 @@ function SectionRenderer({
         <SectionShell title="Gallery" theme={theme}>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 max-w-3xl mx-auto">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            {event.galleryImages.map((g) => <img key={g.id} src={g.url} alt={g.caption ?? ""} className="w-full aspect-square object-cover rounded-lg" />)}
+            {event.galleryImages.map((g) => <img key={g.id} src={g.url} alt={g.caption ?? ""} loading="lazy" decoding="async" className="w-full aspect-square object-cover rounded-lg" />)}
           </div>
         </SectionShell>
       ) : null
@@ -164,7 +165,7 @@ function SectionRenderer({
                 : "We'd love to know if you can make it."}
             </p>
             {event.rsvpDeadline && (
-              <p className="text-xs opacity-60">RSVP by {new Date(event.rsvpDeadline).toLocaleDateString()}</p>
+              <p className="text-xs opacity-60">RSVP by {formatDate(event.rsvpDeadline)}</p>
             )}
           </div>
         </SectionShell>

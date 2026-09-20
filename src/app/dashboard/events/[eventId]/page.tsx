@@ -1,6 +1,6 @@
+import { formatDate } from "@/lib/timezone"
 import Link from "next/link"
-import { notFound } from "next/navigation"
-import { requireUser } from "@/lib/session"
+import { getEventContext } from "@/lib/event-access"
 import { db } from "@/lib/db"
 import { getEventTypeConfig } from "@/lib/event-types"
 import { getEffectivePlan } from "@/lib/entitlements"
@@ -12,11 +12,8 @@ import { QrCodeCard } from "@/components/events/qr-code-card"
 import { Users, CheckCircle2, Clock, XCircle, HelpCircle } from "lucide-react"
 
 export default async function EventOverviewPage({ params }: { params: Promise<{ eventId: string }> }) {
-  const user = await requireUser()
   const { eventId } = await params
-
-  const event = await db.event.findUnique({ where: { id: eventId } })
-  if (!event) notFound()
+  const { user, event } = await getEventContext(eventId)
 
   const [statusCounts, plan] = await Promise.all([
     db.guest.groupBy({ by: ["rsvpStatus"], where: { eventId }, _count: { _all: true } }),
@@ -40,7 +37,7 @@ export default async function EventOverviewPage({ params }: { params: Promise<{ 
           <h1 className="font-heading text-2xl font-bold tracking-tight">{event.name}</h1>
           {event.date && (
             <p className="text-muted-foreground text-sm mt-1">
-              {new Date(event.date).toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric", year: "numeric" })}
+              {formatDate(event.date, { weekday: "long", month: "long", day: "numeric", year: "numeric" })}
               {event.timeLabel ? ` · ${event.timeLabel}` : ""}
               {event.venueName ? ` · ${event.venueName}` : ""}
             </p>

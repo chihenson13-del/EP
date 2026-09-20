@@ -79,6 +79,7 @@ export async function submitPurchase(input: SubmitPurchaseInput): Promise<Action
 export async function listMyPurchases() {
   const user = await requireUser()
   return db.purchase.findMany({
+    relationLoadStrategy: "join",
     where: { userId: user.id },
     include: { plan: true, event: { select: { id: true, name: true, slug: true } } },
     orderBy: { createdAt: "desc" },
@@ -93,6 +94,7 @@ export async function restorePurchases(): Promise<ActionResult<{ restored: numbe
   const user = await requireUser()
 
   const approved = await db.purchase.findMany({
+    relationLoadStrategy: "join",
     where: { userId: user.id, status: "APPROVED" },
     include: { plan: true, entitlement: true },
   })

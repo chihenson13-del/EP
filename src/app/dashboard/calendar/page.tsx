@@ -21,7 +21,7 @@ export default async function BookingCalendarPage() {
     )
   }
 
-  const [events, importedEvents] = await Promise.all([
+  const [events, importedEvents, attendingCounts] = await Promise.all([
     db.event.findMany({
       where: { ownerId: user.id },
       select: {
@@ -38,13 +38,13 @@ export default async function BookingCalendarPage() {
       orderBy: { startAt: "asc" },
       take: 2000,
     }),
+    // Attending headcount per event in the same round trip (joined through the owner).
+    db.guest.groupBy({
+      by: ["eventId"],
+      where: { rsvpStatus: "ATTENDING", event: { ownerId: user.id } },
+      _count: { _all: true },
+    }),
   ])
-
-  const attendingCounts = await db.guest.groupBy({
-    by: ["eventId"],
-    where: { eventId: { in: events.map((e) => e.id) }, rsvpStatus: "ATTENDING" },
-    _count: { _all: true },
-  })
   const attendingMap = new Map(attendingCounts.map((a) => [a.eventId, a._count._all]))
 
   const serializedEvents = events.map((e) => ({

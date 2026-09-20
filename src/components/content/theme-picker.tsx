@@ -14,6 +14,7 @@ import { FONT_PAIRS } from "@/lib/font-pairs"
 import { getFont } from "@/lib/fonts"
 import { COLOR_PALETTES } from "@/lib/color-palettes"
 
+import { safe } from "@/lib/safe-action"
 type Theme = { id: string; key: string; name: string; category: string; description: string | null; isPremium: boolean; config: { primary: string; accent: string; background: string } }
 
 export function ThemePicker({
@@ -38,7 +39,7 @@ export function ThemePicker({
       setUpgradeOpen(true)
       return
     }
-    const result = await setEventTheme(eventId, theme.id)
+    const result = await safe(setEventTheme(eventId, theme.id))
     if (!result.ok) {
         toast.error(result.error)
         return
@@ -53,7 +54,7 @@ export function ThemePicker({
       return
     }
     const clean = Object.fromEntries(Object.entries(colors).filter(([, v]) => v))
-    const result = await updateThemeColors(eventId, clean)
+    const result = await safe(updateThemeColors(eventId, clean))
     if (!result.ok) {
         toast.error(result.error)
         return
@@ -66,7 +67,7 @@ export function ThemePicker({
       setUpgradeOpen(true)
       return
     }
-    const result = await updateThemeColors(eventId, { primary: palette.primary, accent: palette.accent, background: palette.background })
+    const result = await safe(updateThemeColors(eventId, { primary: palette.primary, accent: palette.accent, background: palette.background }))
     if (!result.ok) {
       toast.error(result.error)
       return
@@ -81,7 +82,7 @@ export function ThemePicker({
       setUpgradeOpen(true)
       return
     }
-    const result = await updateThemeFonts(eventId, pairKey)
+    const result = await safe(updateThemeFonts(eventId, pairKey))
     if (!result.ok) {
       toast.error(result.error)
       return

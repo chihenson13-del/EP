@@ -15,6 +15,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge"
 import type { PlanKey } from "@prisma/client"
 
+import { safe } from "@/lib/safe-action"
+import { useSingleFlight } from "@/lib/use-single-flight"
 const PAYMENT_METHODS = ["GCash", "Maya", "MariBank / InstaPay", "Bank Transfer", "Credit/Debit Card", "Over-the-counter"]
 
 type Settings = { paymentQrImageUrl: string | null; paymentAccountName: string | null; paymentAccountInfo: string | null; paymentInstructions: string | null } | null
@@ -35,7 +37,9 @@ export function CheckoutForm({
   const [loading, setLoading] = useState(false)
   const [submitted, setSubmitted] = useState(false)
 
-  async function handleSubmit() {
+  const once = useSingleFlight()
+  function handleSubmit() {
+    return once(async () => {
     if (!paymentMethod) {
       toast.error("Select the payment method you used.")
       return
@@ -45,19 +49,20 @@ export function CheckoutForm({
       return
     }
     setLoading(true)
-    const result = await submitPurchase({
+    const result = await safe(submitPurchase({
       planKey: plan as "PREMIUM" | "PRO" | "UNLIMITED",
       eventId: event?.id,
       paymentMethod,
       paymentReference,
       proofImageUrl,
-    })
+    }))
     setLoading(false)
     if (!result.ok) {
       toast.error(result.error)
       return
     }
     setSubmitted(true)
+      })
   }
 
   if (submitted) {

@@ -10,6 +10,8 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Switch } from "@/components/ui/switch"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
+import { safe } from "@/lib/safe-action"
+import { useSingleFlight } from "@/lib/use-single-flight"
 type QuestionType = "YES_NO" | "MULTIPLE_CHOICE" | "CHECKBOX" | "DROPDOWN" | "SHORT_TEXT" | "LONG_TEXT" | "NUMBER"
 
 type Question = {
@@ -36,6 +38,7 @@ export function QuestionsBuilder({ eventId, questions }: { eventId: string; ques
   const [list, setList] = useState(questions)
   const [pending, startTransition] = useTransition()
 
+  const once = useSingleFlight()
   function addQuestion() {
     setList((prev) => [...prev, { id: `new-${Date.now()}`, label: "", type: "SHORT_TEXT", required: false, options: null }])
   }
@@ -50,13 +53,14 @@ export function QuestionsBuilder({ eventId, questions }: { eventId: string; ques
       return
     }
     startTransition(async () => {
-      const result = await upsertCustomQuestion(eventId, {
+      await once(async () => {
+      const result = await safe(upsertCustomQuestion(eventId, {
         id: question.id.startsWith("new-") ? undefined : question.id,
         label: question.label,
         type: question.type,
         required: question.required,
         options: question.options ?? undefined,
-      })
+      }))
       if (!result.ok) {
         toast.error(result.error)
         return
@@ -66,6 +70,7 @@ export function QuestionsBuilder({ eventId, questions }: { eventId: string; ques
         setList((prev) => prev.map((q) => (q.id === question.id ? { ...q, id: result.data.id } : q)))
       }
     })
+    })
   }
 
   function remove(id: string) {
@@ -74,7 +79,7 @@ export function QuestionsBuilder({ eventId, questions }: { eventId: string; ques
       return
     }
     startTransition(async () => {
-      const result = await deleteCustomQuestion(eventId, id)
+      const result = await safe(deleteCustomQuestion(eventId, id))
       if (!result.ok) {
         toast.error(result.error)
         return

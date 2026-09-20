@@ -1,3 +1,4 @@
+import { requireAdmin } from "@/lib/session"
 import Link from "next/link"
 import { db } from "@/lib/db"
 import { formatPHP } from "@/lib/entitlements"
@@ -5,14 +6,16 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Users, CalendarDays, CreditCard, TrendingUp } from "lucide-react"
 
 export default async function AdminOverviewPage() {
+  await requireAdmin()
   const [userCount, eventCount, pendingCount, approvedPurchases, recentPending] = await Promise.all([
     db.user.count(),
     db.event.count(),
     db.purchase.count({ where: { status: { in: ["PENDING", "SUBMITTED", "UNDER_REVIEW"] } } }),
     db.purchase.findMany({ where: { status: "APPROVED" }, select: { amount: true } }),
     db.purchase.findMany({
+      relationLoadStrategy: "join",
       where: { status: { in: ["PENDING", "SUBMITTED", "UNDER_REVIEW"] } },
-      include: { user: true, plan: true, event: true },
+      select: { id: true, amount: true, user: { select: { name: true } }, plan: { select: { name: true } }, event: { select: { name: true } } },
       orderBy: { createdAt: "desc" },
       take: 5,
     }),

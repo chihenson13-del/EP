@@ -1,4 +1,5 @@
 import Link from "next/link"
+import { unstable_cache } from "next/cache"
 import { db } from "@/lib/db"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
@@ -8,10 +9,17 @@ import { ArrowRight, Crown } from "lucide-react"
 
 export const dynamic = "force-dynamic"
 
+/** Themes change rarely, so the gallery reads them from the data cache (refreshed every 5 minutes) instead of hitting the database on every visit. */
+const getThemes = unstable_cache(
+  () => db.eventTheme.findMany({ orderBy: [{ isPremium: "asc" }, { name: "asc" }] }),
+  ["themes-gallery"],
+  { revalidate: 300 }
+)
+
 type ThemeConfig = { primary: string; accent: string; background: string }
 
 export default async function ThemesGalleryPage() {
-  const themes = await db.eventTheme.findMany({ orderBy: [{ isPremium: "asc" }, { name: "asc" }] })
+  const themes = await getThemes()
 
   return (
     <div className="flex flex-col min-h-screen">

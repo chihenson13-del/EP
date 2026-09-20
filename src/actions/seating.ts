@@ -130,7 +130,7 @@ export async function duplicateTable(eventId: string, tableId: string): Promise<
     if (count >= limits.maxTables) return { ok: false, error: `Your plan allows up to ${limits.maxTables} tables.` }
   }
 
-  const source = await db.table.findFirst({ where: { id: tableId, eventId }, include: { chairs: true } })
+  const source = await db.table.findFirst({ relationLoadStrategy: "join", where: { id: tableId, eventId }, include: { chairs: true } })
   if (!source) return { ok: false, error: "Table not found." }
 
   const number = (await db.table.count({ where: { eventId } })) + 1
@@ -164,6 +164,11 @@ export async function assignGuestToChair(eventId: string, chairId: string, guest
 
   const chair = await db.chair.findFirst({ where: { id: chairId, table: { eventId } } })
   if (!chair) return { ok: false, error: "Seat not found." }
+  if (guestId) {
+    // The guest must belong to THIS event: never seat (or unseat) a guest from someone else's list.
+    const guest = await db.guest.findFirst({ where: { id: guestId, eventId }, select: { id: true } })
+    if (!guest) return { ok: false, error: "Guest not found on this event's list." }
+  }
 
   await db.$transaction(async (tx) => {
     if (guestId) {

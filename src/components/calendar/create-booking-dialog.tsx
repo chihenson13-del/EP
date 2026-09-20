@@ -19,6 +19,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 
+import { safe } from "@/lib/safe-action"
+import { useSingleFlight } from "@/lib/use-single-flight"
 export function CreateBookingDialog({ date, onOpenChange }: { date: Date | null; onOpenChange: (open: boolean) => void }) {
   return (
     <Dialog open={!!date} onOpenChange={(open) => !open && onOpenChange(false)}>
@@ -57,7 +59,7 @@ function BookingForm({ date, onDone }: { date: Date; onDone: () => void }) {
     let cancelled = false
     const timer = setTimeout(async () => {
       setCheckingConflict(true)
-      const result = await checkBookingConflict({ date: watchedDate, timeLabel: watchedTime })
+      const result = await safe(checkBookingConflict({ date: watchedDate, timeLabel: watchedTime }))
       if (cancelled) return
       setCheckingConflict(false)
       if (result.ok) setConflict(result.data)
@@ -68,16 +70,18 @@ function BookingForm({ date, onDone }: { date: Date; onDone: () => void }) {
     }
   }, [watchedDate, watchedTime])
 
-  async function onSubmit(values: CreateEventInput) {
+  const once = useSingleFlight()
+  function onSubmit(values: CreateEventInput) {
+    return once(async () => {
     setLoading(true)
-    const result = await createEvent(values)
+    const result = await safe(createEvent(values))
     if (!result.ok) {
       setLoading(false)
       toast.error(result.error)
       return
     }
     if (description.trim()) {
-      const updated = await updateEvent({
+      const updated = await safe(updateEvent({
         eventId: result.data.eventId,
         name: values.name,
         type: values.type,
@@ -85,13 +89,14 @@ function BookingForm({ date, onDone }: { date: Date; onDone: () => void }) {
         timeLabel: values.timeLabel,
         venueName: values.venueName,
         description: description.trim(),
-      })
+      }))
       if (!updated.ok) toast.error(`Event created, but the description couldn't be saved: ${updated.error}`)
     }
     setLoading(false)
     onDone()
     toast.success("Event created and added to your calendar.")
     router.refresh()
+      })
   }
 
   return (

@@ -1,17 +1,14 @@
-import { notFound } from "next/navigation"
-import { requireUser } from "@/lib/session"
-import { db } from "@/lib/db"
+import { getEventContext } from "@/lib/event-access"
+import { getGalleryForEvent } from "@/lib/gallery"
 import { getEventLimits } from "@/lib/entitlements"
 import { GalleryManager } from "@/components/content/gallery-manager"
 
 export default async function GalleryPage({ params }: { params: Promise<{ eventId: string }> }) {
-  const user = await requireUser()
   const { eventId } = await params
-  const event = await db.event.findUnique({ where: { id: eventId }, select: { id: true } })
-  if (!event) notFound()
+  const { user } = await getEventContext(eventId)
 
   const [images, limits] = await Promise.all([
-    db.galleryImage.findMany({ where: { eventId }, orderBy: { order: "asc" } }),
+    getGalleryForEvent(eventId, { includeHidden: true }),
     getEventLimits(user.id, eventId),
   ])
 

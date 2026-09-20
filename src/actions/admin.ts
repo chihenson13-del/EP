@@ -17,7 +17,7 @@ async function logActivity(actorId: string, action: string, targetType: string, 
 export async function approvePurchase(purchaseId: string): Promise<ActionResult> {
   const admin = await requireAdmin()
 
-  const purchase = await db.purchase.findUnique({ where: { id: purchaseId }, include: { plan: true, user: true } })
+  const purchase = await db.purchase.findUnique({ relationLoadStrategy: "join", where: { id: purchaseId }, include: { plan: true, user: true } })
   if (!purchase) return { ok: false, error: "Purchase not found." }
   if (purchase.status === "APPROVED") return { ok: false, error: "Already approved." }
   if (purchase.plan.scope === "EVENT" && !purchase.eventId) {
@@ -71,7 +71,7 @@ export async function approvePurchase(purchaseId: string): Promise<ActionResult>
 export async function rejectPurchase(purchaseId: string, reason: string): Promise<ActionResult> {
   const admin = await requireAdmin()
 
-  const purchase = await db.purchase.findUnique({ where: { id: purchaseId }, include: { plan: true, user: true } })
+  const purchase = await db.purchase.findUnique({ relationLoadStrategy: "join", where: { id: purchaseId }, include: { plan: true, user: true } })
   if (!purchase) return { ok: false, error: "Purchase not found." }
 
   await db.purchase.update({ where: { id: purchaseId }, data: { status: "REJECTED", rejectedReason: reason } })

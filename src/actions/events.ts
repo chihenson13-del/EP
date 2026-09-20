@@ -1,5 +1,6 @@
 "use server"
 
+import { APP_TIMEZONE } from "@/lib/timezone"
 import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
 import { db } from "@/lib/db"
@@ -45,6 +46,7 @@ export async function createEvent(input: CreateEventInput): Promise<ActionResult
       date: date ? new Date(date) : null,
       timeLabel: timeLabel || null,
       venueName: venueName || null,
+      timezone: APP_TIMEZONE, // explicit, so new events are Singapore-time even before the DB default is updated
       status: "DRAFT",
       page: { create: {} },
       design: { create: {} },
@@ -128,7 +130,7 @@ export async function updateEvent(input: UpdateEventInput): Promise<ActionResult
       date: d.date ? new Date(d.date) : null,
       endDate: d.endDate ? new Date(d.endDate) : null,
       timeLabel: d.timeLabel || null,
-      timezone: d.timezone || undefined,
+      timezone: APP_TIMEZONE, // one product-wide timezone: Singapore
       venueName: d.venueName || null,
       address: d.address || null,
       mapUrl: d.mapUrl || null,
@@ -151,23 +153,23 @@ export async function setEventStatus(eventId: string, status: EventStatus): Prom
   const user = await requireUser()
   try {
     await requireEventAccess(user.id, eventId)
-  } catch {
-    return { ok: false, error: "You do not have access to this event." }
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "You do not have access to this event." }
   }
 
-  await db.event.update({
+  const event = await db.event.update({
     where: { id: eventId },
     data: {
       status,
       archivedAt: status === "ARCHIVED" ? new Date() : null,
       ...(status === "PUBLISHED" ? { isPublic: true } : {}),
     },
+    select: { slug: true },
   })
 
   revalidatePath("/dashboard")
   revalidatePath(`/dashboard/events/${eventId}`)
-  const event = await db.event.findUnique({ where: { id: eventId }, select: { slug: true } })
-  if (event) revalidatePath(`/e/${event.slug}`)
+  revalidatePath(`/e/${event.slug}`)
   return { ok: true, data: undefined }
 }
 
@@ -190,6 +192,7 @@ export async function duplicateEvent(eventId: string): Promise<ActionResult<{ ev
   }
 
   const source = await db.event.findUniqueOrThrow({
+    relationLoadStrategy: "join",
     where: { id: eventId },
     include: { sections: true, customQuestions: true, scheduleItems: true, tables: { include: { chairs: true } }, floorObjects: true, floorPlan: true, page: true },
   })
@@ -216,7 +219,7 @@ export async function duplicateEvent(eventId: string): Promise<ActionResult<{ ev
       status: "DRAFT",
       hostName: source.hostName,
       timeLabel: source.timeLabel,
-      timezone: source.timezone,
+      timezone: APP_TIMEZONE,
       venueName: source.venueName,
       address: source.address,
       description: source.description,

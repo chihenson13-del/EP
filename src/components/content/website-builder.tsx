@@ -12,6 +12,8 @@ import { Badge } from "@/components/ui/badge"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import type { SectionType } from "@prisma/client"
 
+import { safe } from "@/lib/safe-action"
+import { useSingleFlight } from "@/lib/use-single-flight"
 type Section = { id: string; type: SectionType; order: number; visible: boolean; content: Record<string, unknown> }
 
 const SECTION_LABELS: Record<SectionType, string> = {
@@ -26,9 +28,18 @@ export function WebsiteBuilder({ eventId, sections }: { eventId: string; section
   const [list, setList] = useState(sections)
   const [pending, startTransition] = useTransition()
 
+  // Each change shows instantly, is saved in the background, and is rolled back (with a message) if the save fails.
+  const once = useSingleFlight()
   function persistOrder(next: Section[]) {
+    const before = list
     setList(next)
-    startTransition(() => { reorderSections(eventId, next.map((s) => s.id)) })
+    startTransition(async () => {
+      const result = await safe(reorderSections(eventId, next.map((s) => s.id)))
+      if (!result.ok) {
+        setList(before)
+        toast.error(`Couldn't save the new order: ${result.error}`)
+      }
+    })
   }
 
   function move(index: number, dir: -1 | 1) {
@@ -40,37 +51,61 @@ export function WebsiteBuilder({ eventId, sections }: { eventId: string; section
   }
 
   function toggleVisible(id: string, visible: boolean) {
+    const before = list
     setList((prev) => prev.map((s) => (s.id === id ? { ...s, visible } : s)))
-    startTransition(() => { toggleSectionVisibility(eventId, id, visible) })
+    startTransition(async () => {
+      const result = await safe(toggleSectionVisibility(eventId, id, visible))
+      if (!result.ok) {
+        setList(before)
+        toast.error(result.error)
+      }
+    })
   }
 
   function remove(id: string) {
+    const before = list
     setList((prev) => prev.filter((s) => s.id !== id))
-    startTransition(() => { deleteSection(eventId, id) })
+    startTransition(async () => {
+      const result = await safe(deleteSection(eventId, id))
+      if (!result.ok) {
+        setList(before)
+        toast.error(result.error)
+      }
+    })
   }
 
   function duplicate(id: string) {
+    const source = list.find((s) => s.id === id)
     startTransition(async () => {
-      await duplicateSection(eventId, id)
-      toast.success("Section duplicated. Refresh to see it.")
+      await once(async () => {
+      const result = await safe(duplicateSection(eventId, id))
+      if (!result.ok || !source) {
+        toast.error(result.ok ? "Section not found." : result.error)
+        return
+      }
+      setList((prev) => [...prev, { ...source, id: result.data.id, order: result.data.order }])
+      toast.success("Section duplicated.")
+    })
     })
   }
 
   function addNew(type: SectionType) {
     startTransition(async () => {
-      const result = await addSection(eventId, type)
+      await once(async () => {
+      const result = await safe(addSection(eventId, type))
       if (!result.ok) {
         toast.error(result.error)
         return
       }
       setList((prev) => [...prev, { id: result.data.id, type, order: prev.length, visible: true, content: {} }])
     })
+    })
   }
 
   function saveContent(id: string, content: Record<string, unknown>) {
     setList((prev) => prev.map((s) => (s.id === id ? { ...s, content } : s)))
     startTransition(async () => {
-      const result = await updateSectionContent(eventId, id, content)
+      const result = await safe(updateSectionContent(eventId, id, content))
       if (!result.ok) toast.error(result.error)
       else toast.success("Saved.")
     })

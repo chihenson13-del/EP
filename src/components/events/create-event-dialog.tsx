@@ -15,6 +15,8 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 
+import { safe } from "@/lib/safe-action"
+import { useSingleFlight } from "@/lib/use-single-flight"
 export function CreateEventDialog() {
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -25,9 +27,11 @@ export function CreateEventDialog() {
     defaultValues: { name: "", type: "PARTY", date: "", timeLabel: "", venueName: "" },
   })
 
-  async function onSubmit(values: CreateEventInput) {
+  const once = useSingleFlight()
+  function onSubmit(values: CreateEventInput) {
+    return once(async () => {
     setLoading(true)
-    const result = await createEvent(values)
+    const result = await safe(createEvent(values))
     setLoading(false)
     if (!result.ok) {
       toast.error(result.error)
@@ -37,6 +41,7 @@ export function CreateEventDialog() {
     form.reset()
     toast.success("Event created!")
     router.push(`/dashboard/events/${result.data.eventId}`)
+      })
   }
 
   return (

@@ -14,6 +14,8 @@ import {
 } from "@/components/ui/alert-dialog"
 import type { CollaboratorRole, CollaboratorStatus } from "@prisma/client"
 
+import { safe } from "@/lib/safe-action"
+import { useSingleFlight } from "@/lib/use-single-flight"
 type Collaborator = { id: string; invitedEmail: string; role: CollaboratorRole; status: CollaboratorStatus; user: { id: string; name: string | null } | null }
 
 export function TeamManager({ eventId, collaborators, canCollaborate }: { eventId: string; collaborators: Collaborator[]; canCollaborate: boolean }) {
@@ -24,11 +26,13 @@ export function TeamManager({ eventId, collaborators, canCollaborate }: { eventI
   const [upgradeOpen, setUpgradeOpen] = useState(false)
   const [transferTarget, setTransferTarget] = useState<Collaborator | null>(null)
 
-  async function invite() {
+  const once = useSingleFlight()
+  function invite() {
+    return once(async () => {
     if (!canCollaborate) return setUpgradeOpen(true)
     if (!email.trim()) return toast.error("Enter an email address.")
     setLoading(true)
-    const result = await inviteCollaborator(eventId, email, role)
+    const result = await safe(inviteCollaborator(eventId, email, role))
     setLoading(false)
     if (!result.ok) {
       toast.error(result.error)
@@ -37,21 +41,22 @@ export function TeamManager({ eventId, collaborators, canCollaborate }: { eventI
     toast.success("Invitation sent.")
     setList((prev) => [{ id: result.data.id, invitedEmail: email, role, status: "INVITED", user: null }, ...prev])
     setEmail("")
+      })
   }
 
   async function changeRole(id: string, next: CollaboratorRole) {
     setList((prev) => prev.map((c) => (c.id === id ? { ...c, role: next } : c)))
-    await updateCollaboratorRole(eventId, id, next)
+    await safe(updateCollaboratorRole(eventId, id, next))
   }
 
   async function revoke(id: string) {
     setList((prev) => prev.map((c) => (c.id === id ? { ...c, status: "REVOKED" } : c)))
-    await revokeCollaborator(eventId, id)
+    await safe(revokeCollaborator(eventId, id))
   }
 
   async function handleTransfer() {
     if (!transferTarget?.user) return
-    const result = await transferOwnership(eventId, transferTarget.user.id)
+    const result = await safe(transferOwnership(eventId, transferTarget.user.id))
     setTransferTarget(null)
     if (!result.ok) return toast.error(result.error)
     toast.success("Ownership transferred. You've been kept on as coordinator.")

@@ -1,3 +1,4 @@
+import { formatDate } from "@/lib/timezone"
 import { notFound } from "next/navigation"
 import { db } from "@/lib/db"
 import { resolveTheme, fontPairStyle } from "@/lib/theme-resolve"
@@ -7,17 +8,18 @@ import { MusicPlayer } from "@/components/public/music-player"
 export default async function GuestRsvpPage({ params }: { params: Promise<{ eventSlug: string; guestToken: string }> }) {
   const { eventSlug, guestToken } = await params
 
-  const event = await db.event.findUnique({
-    where: { slug: eventSlug },
-    include: { page: { include: { theme: true } }, customQuestions: { orderBy: { order: "asc" } } },
+  // One query: the token is unique, and the event must match the slug in the URL.
+  const found = await db.guest.findFirst({
+    relationLoadStrategy: "join",
+    where: { rsvpToken: guestToken, event: { slug: eventSlug } },
+    include: {
+      plusOnes: true,
+      answers: true,
+      event: { include: { page: { include: { theme: true } }, customQuestions: { orderBy: { order: "asc" } } } },
+    },
   })
-  if (!event) notFound()
-
-  const guest = await db.guest.findFirst({
-    where: { eventId: event.id, rsvpToken: guestToken },
-    include: { plusOnes: true, answers: true },
-  })
-  if (!guest) notFound()
+  if (!found) notFound()
+  const { event, ...guest } = found
 
   const theme = resolveTheme(event.page?.theme?.config, event.page?.colors, event.page?.fonts)
   const deadlinePassed = !!(event.rsvpDeadline && new Date() > event.rsvpDeadline && !event.allowLateRsvp)
@@ -34,7 +36,7 @@ export default async function GuestRsvpPage({ params }: { params: Promise<{ even
           <h1 className="font-heading text-3xl font-bold">{event.name}</h1>
           {event.date && (
             <p className="mt-2 text-sm opacity-70">
-              {new Date(event.date).toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric", year: "numeric" })}
+              {formatDate(event.date, { weekday: "long", month: "long", day: "numeric", year: "numeric" })}
               {event.timeLabel ? ` · ${event.timeLabel}` : ""}
               {event.venueName ? ` · ${event.venueName}` : ""}
             </p>

@@ -13,6 +13,8 @@ import { Checkbox } from "@/components/ui/checkbox"
 import type { ResolvedTheme } from "@/lib/theme-resolve"
 import { CheckCircle2 } from "lucide-react"
 
+import { safe } from "@/lib/safe-action"
+import { useSingleFlight } from "@/lib/use-single-flight"
 type Question = {
   id: string
   label: string
@@ -50,6 +52,7 @@ export function RsvpForm({
   const [submitting, setSubmitting] = useState(false)
   const [done, setDone] = useState(guest.rsvpStatus !== "PENDING")
 
+  const once = useSingleFlight()
   function updatePlusOne(i: number, value: string) {
     setPlusOneNames((prev) => {
       const next = [...prev]
@@ -58,9 +61,10 @@ export function RsvpForm({
     })
   }
 
-  async function handleSubmit() {
+  function handleSubmit() {
+    return once(async () => {
     setSubmitting(true)
-    const result = await submitRsvp({
+    const result = await safe(submitRsvp({
       guestId: guest.id,
       rsvpToken: guest.rsvpToken,
       rsvpStatus: status,
@@ -68,13 +72,14 @@ export function RsvpForm({
       mealPreference: meal,
       dietaryRestrictions: dietary,
       answers,
-    })
+    }))
     setSubmitting(false)
     if (!result.ok) {
       toast.error(result.error)
       return
     }
     setDone(true)
+      })
   }
 
   if (deadlinePassed) {

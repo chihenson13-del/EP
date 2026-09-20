@@ -8,12 +8,15 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 
+import { safe } from "@/lib/safe-action"
+import { useSingleFlight } from "@/lib/use-single-flight"
 type Item = { id: string; time: string; title: string; description: string | null; location: string | null }
 
 export function ScheduleManager({ eventId, items }: { eventId: string; items: Item[] }) {
   const [list, setList] = useState(items)
   const [pending, startTransition] = useTransition()
 
+  const once = useSingleFlight()
   function addItem() {
     setList((prev) => [...prev, { id: `new-${Date.now()}`, time: "", title: "", description: "", location: "" }])
   }
@@ -28,10 +31,11 @@ export function ScheduleManager({ eventId, items }: { eventId: string; items: It
       return
     }
     startTransition(async () => {
-      const result = await upsertScheduleItem(eventId, {
+      await once(async () => {
+      const result = await safe(upsertScheduleItem(eventId, {
         id: item.id.startsWith("new-") ? undefined : item.id,
         time: item.time, title: item.title, description: item.description ?? undefined, location: item.location ?? undefined,
-      })
+      }))
       if (!result.ok) {
         toast.error(result.error)
         return
@@ -39,12 +43,13 @@ export function ScheduleManager({ eventId, items }: { eventId: string; items: It
       toast.success("Saved.")
       if (item.id.startsWith("new-")) setList((prev) => prev.map((i) => (i.id === item.id ? { ...i, id: result.data.id } : i)))
     })
+    })
   }
 
   function remove(id: string) {
     if (id.startsWith("new-")) return setList((prev) => prev.filter((i) => i.id !== id))
     startTransition(async () => {
-      const result = await deleteScheduleItem(eventId, id)
+      const result = await safe(deleteScheduleItem(eventId, id))
       if (!result.ok) {
         toast.error(result.error)
         return

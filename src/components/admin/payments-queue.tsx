@@ -1,5 +1,6 @@
 "use client"
 
+import { formatDate } from "@/lib/timezone"
 import { useMemo, useState, useTransition } from "react"
 import { toast } from "sonner"
 import { Check, X, FlaskConical, Gift } from "lucide-react"
@@ -13,6 +14,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { Textarea } from "@/components/ui/textarea"
 import { GrantEntitlementDialog } from "@/components/admin/grant-entitlement-dialog"
 
+import { safe } from "@/lib/safe-action"
 type Purchase = {
   id: string
   amount: number
@@ -49,7 +51,7 @@ export function PaymentsQueue({
 
   function handleApprove(id: string) {
     startTransition(async () => {
-      const result = await approvePurchase(id)
+      const result = await safe(approvePurchase(id))
       if (!result.ok) {
         toast.error(result.error)
         return
@@ -61,7 +63,7 @@ export function PaymentsQueue({
   function handleReject() {
     if (!rejecting) return
     startTransition(async () => {
-      const result = await rejectPurchase(rejecting.id, rejectReason || "No reason given")
+      const result = await safe(rejectPurchase(rejecting.id, rejectReason || "No reason given"))
       if (!result.ok) {
         toast.error(result.error)
         return
@@ -111,7 +113,7 @@ export function PaymentsQueue({
             {filtered.length === 0 && <TableRow><TableCell colSpan={10} className="text-center text-muted-foreground py-10">Nothing here.</TableCell></TableRow>}
             {filtered.map((p) => (
               <TableRow key={p.id}>
-                <TableCell className="text-sm">{new Date(p.createdAt).toLocaleDateString()}</TableCell>
+                <TableCell className="text-sm">{formatDate(p.createdAt)}</TableCell>
                 <TableCell className="text-sm">
                   <div className="font-medium">{p.user.name}</div>
                   <div className="text-muted-foreground text-xs">{p.user.email}</div>
@@ -192,7 +194,7 @@ function TestPaymentDialog({
         return
       }
     startTransition(async () => {
-      const result = await simulateTestPayment(userId, planKey, planKey === "UNLIMITED" ? undefined : eventId || undefined, outcome)
+      const result = await safe(simulateTestPayment(userId, planKey, planKey === "UNLIMITED" ? undefined : eventId || undefined, outcome))
       if (!result.ok) {
         toast.error(result.error)
         return

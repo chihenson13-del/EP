@@ -1,14 +1,11 @@
-import { notFound } from "next/navigation"
-import { requireUser } from "@/lib/session"
+import { getEventContext } from "@/lib/event-access"
 import { db } from "@/lib/db"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { ExportButtons } from "@/components/events/export-buttons"
 
 export default async function AnalyticsPage({ params }: { params: Promise<{ eventId: string }> }) {
-  await requireUser()
   const { eventId } = await params
-  const event = await db.event.findUnique({ where: { id: eventId } })
-  if (!event) notFound()
+  await getEventContext(eventId)
 
   const [statusCounts, guests, messageLogCounts] = await Promise.all([
     db.guest.groupBy({ by: ["rsvpStatus"], where: { eventId }, _count: { _all: true } }),

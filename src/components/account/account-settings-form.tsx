@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import type { User } from "@prisma/client"
 
+import { safe } from "@/lib/safe-action"
 export function AccountSettingsForm({ user, hasCoBranding }: { user: User; hasCoBranding: boolean }) {
   const [name, setName] = useState(user.name ?? "")
   const [businessName, setBusinessName] = useState(user.businessName ?? "")
@@ -24,7 +25,7 @@ export function AccountSettingsForm({ user, hasCoBranding }: { user: User; hasCo
 
   async function saveProfile() {
     setSavingProfile(true)
-    const result = await updateProfile({ name, businessName, brandColor })
+    const result = await safe(updateProfile({ name, businessName, brandColor }))
     setSavingProfile(false)
     if (!result.ok) {
         toast.error(result.error)
@@ -35,7 +36,7 @@ export function AccountSettingsForm({ user, hasCoBranding }: { user: User; hasCo
 
   async function handleLogoUpload(dataUrl: string) {
     setLogoUrl(dataUrl)
-    const result = await updateBrandLogo(dataUrl)
+    const result = await safe(updateBrandLogo(dataUrl))
     if (!result.ok) toast.error(result.error)
     else toast.success("Logo updated.")
   }
@@ -46,7 +47,7 @@ export function AccountSettingsForm({ user, hasCoBranding }: { user: User; hasCo
         return
       }
     setSavingPassword(true)
-    const result = await changePassword({ currentPassword, newPassword })
+    const result = await safe(changePassword({ currentPassword, newPassword }))
     setSavingPassword(false)
     if (!result.ok) {
         toast.error(result.error)

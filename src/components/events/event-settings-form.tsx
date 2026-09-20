@@ -1,5 +1,6 @@
 "use client"
 
+import { APP_TIMEZONE } from "@/lib/timezone"
 import { useState } from "react"
 import { toast } from "sonner"
 import { updateEvent } from "@/actions/events"
@@ -14,6 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { MusicSettingsForm } from "@/components/events/music-settings-form"
 import type { Event, EventType } from "@prisma/client"
 
+import { safe } from "@/lib/safe-action"
 type EventLike = Omit<Event, "date" | "endDate" | "rsvpDeadline" | "createdAt" | "updatedAt" | "archivedAt"> & {
   date: string | null; endDate: string | null; rsvpDeadline: string | null
 }
@@ -47,7 +49,7 @@ export function EventSettingsForm({ event }: { event: EventLike }) {
 
   async function save() {
     setLoading(true)
-    const result = await updateEvent({ eventId: event.id, ...form })
+    const result = await safe(updateEvent({ eventId: event.id, ...form }))
     setLoading(false)
     if (!result.ok) {
         toast.error(result.error)
@@ -79,7 +81,7 @@ export function EventSettingsForm({ event }: { event: EventLike }) {
           <Field label="Date"><Input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} /></Field>
           <Field label="Time"><Input value={form.timeLabel} onChange={(e) => setForm({ ...form, timeLabel: e.target.value })} /></Field>
         </div>
-        <Field label="Timezone"><Input value={form.timezone} onChange={(e) => setForm({ ...form, timezone: e.target.value })} /></Field>
+        <Field label="Timezone"><Input value={APP_TIMEZONE} readOnly disabled aria-describedby="tz-note" /><p id="tz-note" className="text-xs text-muted-foreground mt-1">All Events Partner times are Singapore time (UTC+8).</p></Field>
         <Field label="Venue name"><Input value={form.venueName} onChange={(e) => setForm({ ...form, venueName: e.target.value })} /></Field>
         <Field label="Address"><Input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} /></Field>
         <Field label="Google Maps URL"><Input value={form.mapUrl} onChange={(e) => setForm({ ...form, mapUrl: e.target.value })} /></Field>
