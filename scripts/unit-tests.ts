@@ -6,6 +6,9 @@ import { updateEventSchema } from "../src/lib/validations/event"
 import { submitPurchaseSchema } from "../src/lib/validations/payment"
 import { sanitizeCanvas } from "../src/lib/design-canvas"
 import { formatDate, formatDateTime, calendarDayOf, singaporeLocalToInstant, appNow, APP_TIMEZONE } from "../src/lib/timezone"
+import { randomBytes } from "node:crypto"
+import sharp from "sharp"
+import { shrinkDataUrl, shrinkCanvasObjects, SHRINK_ABOVE_BYTES } from "../src/lib/shrink-image"
 import { isAdminEmail } from "../src/lib/admin-emails"
 import { withDesignImageUrls } from "../src/lib/design-images"
 import { parseTimeLabel, getEventWindow, windowsOverlap, getBookingStatus } from "../src/lib/booking-calendar"
@@ -151,4 +154,53 @@ t("admin emails: matches either variable, any case, comma lists, and never an em
   if (before[0] !== undefined) process.env.ADMIN_BOOTSTRAP_EMAIL = before[0]
   if (before[1] !== undefined) process.env.ADMIN_EMAILS = before[1]
 })
-console.log(`\n${n} groups passed`)
+const ta = async (name: string, fn: () => Promise<void>) => { await fn(); n++; console.log("ok -", name) }
+
+async function asyncTests() {
+  // A noisy picture is the worst case for PNG (it barely compresses), so it stands in for a big camera photo.
+  const noise = randomBytes(1400 * 1400 * 3)
+  const bigPng = await sharp(noise, { raw: { width: 1400, height: 1400, channels: 3 } }).png().toBuffer()
+  const bigJpeg = await sharp(noise, { raw: { width: 1400, height: 1400, channels: 3 } }).jpeg({ quality: 100 }).toBuffer()
+  assert.ok(bigPng.length > SHRINK_ABOVE_BYTES && bigJpeg.length > SHRINK_ABOVE_BYTES)
+  const bytesOf = (dataUrl: string) => Buffer.from(dataUrl.split(",")[1], "base64")
+
+  await ta("shrink: a large PNG becomes a smaller, valid, size-capped WebP", async () => {
+    const before = "data:image/png;base64," + bigPng.toString("base64")
+    const after = await shrinkDataUrl(before)
+    assert.ok(after.startsWith("data:image/webp;base64,"))
+    assert.ok(after.length < before.length)
+    const meta = await sharp(bytesOf(after)).metadata()
+    assert.equal(meta.format, "webp")
+    assert.ok(Math.max(meta.width!, meta.height!) <= 1600)
+  })
+  await ta("shrink: a large JPEG stays a JPEG and gets smaller", async () => {
+    const before = "data:image/jpeg;base64," + bigJpeg.toString("base64")
+    const after = await shrinkDataUrl(before)
+    assert.ok(after.startsWith("data:image/jpeg;base64,"))
+    assert.ok(after.length < before.length)
+  })
+  await ta("shrink: small pictures, GIFs, external URLs and unreadable data are returned untouched", async () => {
+    const small = "data:image/png;base64," + (await sharp({ create: { width: 10, height: 10, channels: 3, background: "#fff" } }).png().toBuffer()).toString("base64")
+    assert.equal(await shrinkDataUrl(small), small)
+    const gif = "data:image/gif;base64," + bigPng.toString("base64")
+    assert.equal(await shrinkDataUrl(gif), gif)
+    assert.equal(await shrinkDataUrl("https://example.com/x.png"), "https://example.com/x.png")
+    const broken = "data:image/png;base64," + "A".repeat(600_000)
+    assert.equal(await shrinkDataUrl(broken), broken)
+  })
+  await ta("shrink: only image objects are rewritten, and only when something got smaller", async () => {
+    const big = "data:image/png;base64," + bigPng.toString("base64")
+    const input = [{ id: "a", type: "image", src: big, x: 3 }, { id: "b", type: "text", src: big }, { id: "c", type: "image", src: "https://example.com/x.png" }]
+    const out = await shrinkCanvasObjects(input)
+    assert.equal(out.changed, true)
+    assert.notEqual(out.objects[0].src, big)
+    assert.equal(out.objects[0].x, 3)
+    assert.equal(out.objects[1].src, big)
+    assert.equal(out.objects[2].src, "https://example.com/x.png")
+    assert.equal(input[0].src, big) // the input is never mutated
+    const again = await shrinkCanvasObjects(out.objects)
+    assert.equal(again.changed, false) // already small: nothing to do the second time
+  })
+}
+
+asyncTests().then(() => console.log(`\n${n} groups passed`)).catch((error) => { console.error(error); process.exit(1) })

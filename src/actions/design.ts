@@ -6,6 +6,7 @@ import { requireUser } from "@/lib/session"
 import { getEventAccessRole } from "@/lib/event-access"
 import { hasFeature, FEATURES } from "@/lib/entitlements"
 import { sanitizeCanvas } from "@/lib/design-canvas"
+import { shrinkCanvasObjects } from "@/lib/shrink-image"
 import type { ActionResult } from "@/actions/events"
 import type { Prisma } from "@prisma/client"
 
@@ -21,7 +22,9 @@ export async function saveDesign(eventId: string, canvasJson: unknown): Promise<
 
   const sanitized = sanitizeCanvas(canvasJson)
   if (!sanitized.ok) return { ok: false, error: sanitized.error }
-  const json = sanitized.data as unknown as Prisma.InputJsonValue
+  // Large pictures are downscaled here too, so a design never grows the editor and invitation pages back to megabytes.
+  const shrunk = await shrinkCanvasObjects(sanitized.data.objects)
+  const json = { ...sanitized.data, objects: shrunk.objects } as unknown as Prisma.InputJsonValue
 
   const saved = await db.eventDesign.upsert({
     where: { eventId },
