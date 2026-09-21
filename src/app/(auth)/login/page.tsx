@@ -31,7 +31,7 @@ function LoginForm() {
     const result = await signIn("credentials", { ...values, redirect: false })
     setLoading(false)
     if (result?.error) {
-      toast.error("Incorrect email or password.")
+      toast.error(result.code === "too_many_attempts" ? "Too many sign-in attempts. Please wait a few minutes and try again." : "Incorrect email or password.")
       return
     }
     router.push(callbackUrl)

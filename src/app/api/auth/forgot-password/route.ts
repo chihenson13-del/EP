@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
+import { rateLimit, clientIp } from "@/lib/rate-limit"
 import { forgotPasswordSchema } from "@/lib/validations/auth"
 import { createPasswordResetToken } from "@/lib/tokens"
 import { sendEmail } from "@/lib/mailer"
@@ -11,6 +12,13 @@ export async function POST(req: Request) {
   if (!parsed.success) {
     return NextResponse.json({ error: "Enter a valid email address." }, { status: 400 })
   }
+
+  // Stops mailbox flooding. Still answers "ok" so the response never hints at whether an account exists.
+  const [byIp, byEmail] = await Promise.all([
+    rateLimit(`forgot:ip:${clientIp(req.headers)}`, 8, 60 * 60),
+    rateLimit(`forgot:email:${parsed.data.email}`, 3, 60 * 60),
+  ])
+  if (!byIp.ok || !byEmail.ok) return NextResponse.json({ ok: true })
 
   const user = await db.user.findUnique({ where: { email: parsed.data.email } })
 

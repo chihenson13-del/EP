@@ -1,6 +1,8 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
+import { headers } from "next/headers"
+import { rateLimit, clientIp, waitMessage } from "@/lib/rate-limit"
 import { db } from "@/lib/db"
 import { rsvpSubmitSchema, type RsvpSubmitInput } from "@/lib/validations/rsvp"
 import type { ActionResult } from "@/actions/events"
@@ -9,6 +11,13 @@ export async function submitRsvp(input: RsvpSubmitInput): Promise<ActionResult<{
   const parsed = rsvpSubmitSchema.safeParse(input)
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid submission." }
   const d = parsed.data
+
+  // Public endpoint (no login): cap it per network address and per invitation.
+  const [byIp, byToken] = await Promise.all([
+    rateLimit(`rsvp:ip:${clientIp(await headers())}`, 120, 10 * 60),
+    rateLimit(`rsvp:token:${d.rsvpToken}`, 40, 10 * 60),
+  ])
+  if (!byIp.ok || !byToken.ok) return { ok: false, error: waitMessage(Math.max(byIp.ok ? 0 : byIp.retryAfterSec, byToken.ok ? 0 : byToken.retryAfterSec)) }
 
   const guest = await db.guest.findUnique({
     relationLoadStrategy: "join",

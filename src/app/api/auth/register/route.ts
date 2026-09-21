@@ -1,12 +1,16 @@
 import { NextResponse } from "next/server"
 import bcrypt from "bcryptjs"
 import { db } from "@/lib/db"
+import { rateLimit, clientIp, waitMessage } from "@/lib/rate-limit"
 import { registerSchema } from "@/lib/validations/auth"
 import { createEmailVerificationToken } from "@/lib/tokens"
 import { sendEmail } from "@/lib/mailer"
 import { verifyEmailTemplate } from "@/lib/email-templates"
 
 export async function POST(req: Request) {
+  const limited = await rateLimit(`register:ip:${clientIp(req.headers)}`, 10, 60 * 60)
+  if (!limited.ok) return NextResponse.json({ error: waitMessage(limited.retryAfterSec) }, { status: 429 })
+
   const body = await req.json().catch(() => null)
   const parsed = registerSchema.safeParse(body)
   if (!parsed.success) {
