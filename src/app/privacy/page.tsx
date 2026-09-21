@@ -31,14 +31,6 @@ export default function PrivacyPage() {
       </ul>
       <p>We do not sell personal information and we do not show advertising.</p>
 
-      <h2>Who processes it for us</h2>
-      <ul>
-        <li><strong>Vercel</strong> hosts the website and its servers (in Singapore).</li>
-        <li><strong>Neon</strong> hosts the database (in Singapore).</li>
-        <li><strong>Resend</strong> delivers emails, and an SMS provider delivers text messages, when those are enabled for the site.</li>
-        <li><strong>Google</strong> provides optional Google sign-in. If a host adds background music, the invitation page loads a YouTube player, and YouTube may set its own cookies and receive the visitor&apos;s IP address once the player is used.</li>
-      </ul>
-
       <h2>Guests</h2>
       <p>
         If you received an invitation, the host who invited you entered your name and contact details and is responsible for how they use your responses. Your RSVP is visible to that host and to any team members they add. If you want your details removed from an event, ask the host, or contact us using the details below.
