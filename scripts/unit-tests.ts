@@ -6,6 +6,7 @@ import { updateEventSchema } from "../src/lib/validations/event"
 import { submitPurchaseSchema } from "../src/lib/validations/payment"
 import { sanitizeCanvas } from "../src/lib/design-canvas"
 import { formatDate, formatDateTime, calendarDayOf, singaporeLocalToInstant, appNow, APP_TIMEZONE } from "../src/lib/timezone"
+import { isAdminEmail } from "../src/lib/admin-emails"
 import { parseTimeLabel, getEventWindow, windowsOverlap, getBookingStatus } from "../src/lib/booking-calendar"
 
 let n = 0
@@ -106,5 +107,21 @@ t("timezone: appNow reads Singapore wall-clock time", () => {
   const now = appNow()
   const sg = new Intl.DateTimeFormat("en-US", { timeZone: APP_TIMEZONE, hourCycle: "h23", hour: "numeric" }).format(new Date())
   assert.equal(now.getHours(), Number(sg))
+})
+t("admin emails: matches either variable, any case, comma lists, and never an empty value", () => {
+  const before = [process.env.ADMIN_BOOTSTRAP_EMAIL, process.env.ADMIN_EMAILS]
+  process.env.ADMIN_BOOTSTRAP_EMAIL = "Owner@Example.com"
+  process.env.ADMIN_EMAILS = " a@x.com , B@X.com "
+  assert.equal(isAdminEmail("owner@example.com"), true)
+  assert.equal(isAdminEmail("b@x.com"), true)
+  assert.equal(isAdminEmail("c@x.com"), false)
+  assert.equal(isAdminEmail(""), false)
+  assert.equal(isAdminEmail(null), false)
+  delete process.env.ADMIN_BOOTSTRAP_EMAIL
+  delete process.env.ADMIN_EMAILS
+  assert.equal(isAdminEmail("owner@example.com"), false)
+  assert.equal(isAdminEmail(""), false)
+  if (before[0] !== undefined) process.env.ADMIN_BOOTSTRAP_EMAIL = before[0]
+  if (before[1] !== undefined) process.env.ADMIN_EMAILS = before[1]
 })
 console.log(`\n${n} groups passed`)

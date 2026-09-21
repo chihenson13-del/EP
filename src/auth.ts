@@ -6,6 +6,7 @@ import { PrismaAdapter } from "@auth/prisma-adapter"
 import bcrypt from "bcryptjs"
 import { db } from "@/lib/db"
 import { rateLimit, clearRateLimit, clientIp } from "@/lib/rate-limit"
+import { isAdminEmail } from "@/lib/admin-emails"
 
 const PROFILE_REFRESH_MS = 5 * 60 * 1000
 
@@ -58,6 +59,10 @@ if (process.env.AUTH_GOOGLE_ID && process.env.AUTH_GOOGLE_SECRET) {
     Google({
       clientId: process.env.AUTH_GOOGLE_ID,
       clientSecret: process.env.AUTH_GOOGLE_SECRET,
+      // Google has verified the address, so signing in with it attaches to the existing account with that email
+      // instead of failing with "OAuthAccountNotLinked". The signIn callback below first drops any unverified
+      // password on that account, so a stranger who pre-registered the address can't keep a way in.
+      allowDangerousEmailAccountLinking: true,
     })
   )
 }
@@ -77,25 +82,28 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       if (account?.provider !== "credentials" && user.email) {
         const existing = await db.user.findUnique({ where: { email: user.email } })
         if (existing && !existing.emailVerified) {
-          await db.user.update({ where: { id: existing.id }, data: { emailVerified: new Date() } })
-        }
-        if (
-          process.env.ADMIN_BOOTSTRAP_EMAIL &&
-          user.email.toLowerCase() === process.env.ADMIN_BOOTSTRAP_EMAIL.toLowerCase() &&
-          existing &&
-          existing.role !== "ADMIN"
-        ) {
-          await db.user.update({ where: { id: existing.id }, data: { role: "ADMIN" } })
+          // Sign-up never checked this address, so a password set before now can't be trusted: Google has only
+          // just proven who owns the mailbox. Drop it; they sign in with Google (or reset the password later).
+          await db.user.update({
+            where: { id: existing.id },
+            data: { emailVerified: new Date(), ...(existing.passwordHash ? { passwordHash: null } : {}) },
+          })
         }
       }
       return true
     },
-    async jwt({ token, user, trigger }) {
+    async jwt({ token, user, trigger, account }) {
       if (user) {
         token.id = user.id as string
         token.role = (user as { role?: string }).role ?? "USER"
         token.emailVerified = (user as { emailVerified?: Date | null }).emailVerified ?? null
         token.refreshedAt = Date.now()
+        // Admin emails are promoted only when the provider has verified the address (Google), never on a password
+        // sign-in. This also covers a brand-new account, which doesn't exist yet when the signIn callback runs.
+        if (account && account.provider !== "credentials" && isAdminEmail(user.email) && token.role !== "ADMIN") {
+          await db.user.update({ where: { id: user.id as string }, data: { role: "ADMIN" } })
+          token.role = "ADMIN"
+        }
       }
       // Profile fields are re-read from the database when the session is explicitly updated, or at most
       // every PROFILE_REFRESH_MS otherwise. Previously this ran a query on EVERY request, which added a

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import bcrypt from "bcryptjs"
 import { db } from "@/lib/db"
+import { isAdminEmail } from "@/lib/admin-emails"
 import { rateLimit, clientIp, waitMessage } from "@/lib/rate-limit"
 import { registerSchema } from "@/lib/validations/auth"
 import { createEmailVerificationToken } from "@/lib/tokens"
@@ -25,7 +26,9 @@ export async function POST(req: Request) {
   }
 
   const passwordHash = await bcrypt.hash(password, 12)
-  const isBootstrapAdmin = process.env.ADMIN_BOOTSTRAP_EMAIL?.toLowerCase() === email
+  // Sign-up does not prove the person owns the address, so on production nobody becomes admin here: admin
+  // emails are promoted when they sign in with Google, which has verified them. Local development keeps the shortcut.
+  const isBootstrapAdmin = process.env.NODE_ENV !== "production" && isAdminEmail(email)
 
   const user = await db.user.create({
     data: {
