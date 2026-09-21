@@ -3,7 +3,7 @@ import { db } from "@/lib/db"
 import { rateLimit, clientIp } from "@/lib/rate-limit"
 import { forgotPasswordSchema } from "@/lib/validations/auth"
 import { createPasswordResetToken } from "@/lib/tokens"
-import { sendEmail } from "@/lib/mailer"
+import { sendEmail, isEmailConfigured } from "@/lib/mailer"
 import { resetPasswordTemplate } from "@/lib/email-templates"
 
 export async function POST(req: Request) {
@@ -18,13 +18,15 @@ export async function POST(req: Request) {
     rateLimit(`forgot:ip:${clientIp(req.headers)}`, 8, 60 * 60),
     rateLimit(`forgot:email:${parsed.data.email}`, 3, 60 * 60),
   ])
-  if (!byIp.ok || !byEmail.ok) return NextResponse.json({ ok: true })
+  // emailMock describes the whole site (no email provider configured), not this address, so it leaks nothing about accounts.
+  const reply = { ok: true, emailMock: !isEmailConfigured }
+  if (!byIp.ok || !byEmail.ok) return NextResponse.json(reply)
 
   const user = await db.user.findUnique({ where: { email: parsed.data.email } })
 
   // Always return ok — never reveal whether an account exists.
   if (!user || !user.passwordHash) {
-    return NextResponse.json({ ok: true })
+    return NextResponse.json(reply)
   }
 
   const token = await createPasswordResetToken(user.id)
@@ -35,5 +37,5 @@ export async function POST(req: Request) {
     html: resetPasswordTemplate(user.name ?? "there", url),
   })
 
-  return NextResponse.json({ ok: true })
+  return NextResponse.json(reply)
 }

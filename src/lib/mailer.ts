@@ -16,6 +16,9 @@ export type SendEmailResult = {
 
 const resendClient = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null
 
+/** False while the site is in mock email mode (no RESEND_API_KEY), i.e. nothing it "sends" ever leaves the server. */
+export const isEmailConfigured = resendClient !== null
+
 /**
  * Provider-ready email sender.
  * If RESEND_API_KEY is not configured, this runs in clearly-labeled

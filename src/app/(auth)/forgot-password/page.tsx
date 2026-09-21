@@ -15,6 +15,7 @@ type Values = z.infer<typeof forgotPasswordSchema>
 
 export default function ForgotPasswordPage() {
   const [sent, setSent] = useState(false)
+  const [emailOff, setEmailOff] = useState(false)
   const [loading, setLoading] = useState(false)
 
   const form = useForm<Values>({
@@ -24,12 +25,14 @@ export default function ForgotPasswordPage() {
 
   async function onSubmit(values: Values) {
     setLoading(true)
-    await fetch("/api/auth/forgot-password", {
+    const res = await fetch("/api/auth/forgot-password", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(values),
-    })
+    }).catch(() => null)
+    const body = (await res?.json().catch(() => null)) as { emailMock?: boolean } | null
     setLoading(false)
+    setEmailOff(body?.emailMock === true)
     setSent(true)
   }
 
@@ -37,9 +40,11 @@ export default function ForgotPasswordPage() {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Check your email</CardTitle>
+          <CardTitle>{emailOff ? "Email isn't set up yet" : "Check your email"}</CardTitle>
           <CardDescription>
-            If an account exists for that address, we&apos;ve sent a password reset link.
+            {emailOff
+              ? "This site can't send email right now, so no reset link was sent. Please sign in with Google, or contact the site owner."
+              : "If an account exists for that address, we've sent a password reset link."}
           </CardDescription>
         </CardHeader>
         <CardContent>
