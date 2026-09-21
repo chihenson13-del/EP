@@ -27,8 +27,33 @@ function toResponse(value: string, cacheControl: string): Response {
   })
 }
 
-export async function GET(_req: Request, { params }: { params: Promise<{ kind: string; id: string }> }) {
+export async function GET(req: Request, { params }: { params: Promise<{ kind: string; id: string }> }) {
   const { kind, id } = await params
+
+  if (kind === "design") {
+    // A picture placed on an invitation design. `id` is the event, `o` the design object holding the picture.
+    const objectId = new URL(req.url).searchParams.get("o")
+    if (!objectId) return new Response("Not found", { status: 404 })
+    const design = await db.eventDesign.findUnique({
+      relationLoadStrategy: "join",
+      where: { eventId: id },
+      select: { canvasJson: true, event: { select: { status: true, isPublic: true } } },
+    })
+    const objects = (design?.canvasJson as { objects?: unknown } | null)?.objects
+    const picture = Array.isArray(objects)
+      ? (objects as { id?: unknown; type?: unknown; hidden?: unknown; src?: unknown }[]).find((o) => o?.id === objectId && o.type === "image")
+      : undefined
+    if (!design || typeof picture?.src !== "string") return new Response("Not found", { status: 404 })
+
+    // On a published, public invitation the design is public; before that it is for the event team only.
+    if (design.event.status === "PUBLISHED" && design.event.isPublic && !picture.hidden) {
+      // The ?v= in the URL changes whenever the design is saved, so a replaced picture is never served stale.
+      return toResponse(picture.src, "public, max-age=3600, stale-while-revalidate=86400")
+    }
+    const user = await getCurrentUser()
+    if (!user || !(await getEventAccessRole(user.id, id))) return new Response("Not found", { status: 404 })
+    return toResponse(picture.src, "private, no-cache")
+  }
 
   if (kind === "gallery") {
     const image = await db.galleryImage.findUnique({

@@ -7,6 +7,7 @@ import { submitPurchaseSchema } from "../src/lib/validations/payment"
 import { sanitizeCanvas } from "../src/lib/design-canvas"
 import { formatDate, formatDateTime, calendarDayOf, singaporeLocalToInstant, appNow, APP_TIMEZONE } from "../src/lib/timezone"
 import { isAdminEmail } from "../src/lib/admin-emails"
+import { withDesignImageUrls } from "../src/lib/design-images"
 import { parseTimeLabel, getEventWindow, windowsOverlap, getBookingStatus } from "../src/lib/booking-calendar"
 
 let n = 0
@@ -107,6 +108,32 @@ t("timezone: appNow reads Singapore wall-clock time", () => {
   const now = appNow()
   const sg = new Intl.DateTimeFormat("en-US", { timeZone: APP_TIMEZONE, hourCycle: "h23", hour: "numeric" }).format(new Date())
   assert.equal(now.getHours(), Number(sg))
+})
+t("design images: data-URL pictures become versioned media URLs, everything else is untouched", () => {
+  const updatedAt = new Date("2027-01-01T00:00:00Z")
+  const big = "data:image/png;base64," + "A".repeat(1000)
+  const event = {
+    id: "ev1",
+    design: {
+      updatedAt,
+      canvasJson: { objects: [
+        { id: "a b", type: "image", src: big, x: 1 },
+        { id: "c", type: "image", src: "https://cdn.example.com/x.png" },
+        { id: "d", type: "text", text: "hi", src: big },
+        { id: "e", type: "rect" },
+      ] },
+    },
+  }
+  const out = withDesignImageUrls(event)!
+  const objs = (out.design!.canvasJson as { objects: Record<string, unknown>[] }).objects
+  assert.equal(objs[0].src, `/api/media/design/ev1?o=a%20b&v=${updatedAt.getTime()}`)
+  assert.equal(objs[0].x, 1)
+  assert.equal(objs[1].src, "https://cdn.example.com/x.png")
+  assert.equal(objs[2].src, big) // only image objects are rewritten
+  assert.equal(objs[3].type, "rect")
+  assert.equal((event.design.canvasJson.objects[0] as { src: string }).src, big) // the stored data is never mutated
+  assert.equal(withDesignImageUrls(null), null)
+  assert.equal(withDesignImageUrls({ id: "x", design: null })!.design, null)
 })
 t("admin emails: matches either variable, any case, comma lists, and never an empty value", () => {
   const before = [process.env.ADMIN_BOOTSTRAP_EMAIL, process.env.ADMIN_EMAILS]
