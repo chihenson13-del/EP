@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto"
 import { db } from "@/lib/db"
 import { getCurrentUser } from "@/lib/session"
 import { getEventAccessRole } from "@/lib/event-access"
@@ -45,14 +46,24 @@ export async function GET(req: Request, { params }: { params: Promise<{ kind: st
       : undefined
     if (!design || typeof picture?.src !== "string") return new Response("Not found", { status: 404 })
 
+    // A content fingerprint lets the browser revalidate with If-None-Match and get an empty 304 instead of the whole picture.
+    const etag = `"${createHash("sha1").update(picture.src).digest("base64url").slice(0, 22)}"`
+    const respond = (cacheControl: string) => {
+      if (req.headers.get("if-none-match") === etag) return new Response(null, { status: 304, headers: { ETag: etag, "Cache-Control": cacheControl } })
+      const response = toResponse(picture.src as string, cacheControl)
+      if (response.status === 200) response.headers.set("ETag", etag) // a redirect (externally hosted picture) has immutable headers
+      return response
+    }
+
     // On a published, public invitation the design is public; before that it is for the event team only.
     if (design.event.status === "PUBLISHED" && design.event.isPublic && !picture.hidden) {
       // The ?v= in the URL changes whenever the design is saved, so a replaced picture is never served stale.
-      return toResponse(picture.src, "public, max-age=3600, stale-while-revalidate=86400")
+      return respond("public, max-age=3600, stale-while-revalidate=86400")
     }
     const user = await getCurrentUser()
     if (!user || !(await getEventAccessRole(user.id, id))) return new Response("Not found", { status: 404 })
-    return toResponse(picture.src, "private, no-cache")
+    // Access is checked on every request; only the download is skipped when the picture hasn't changed.
+    return respond("private, no-cache")
   }
 
   if (kind === "gallery") {
