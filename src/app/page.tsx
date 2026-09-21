@@ -188,6 +188,10 @@ export default function LandingPage() {
       <footer className="border-t border-border/70 py-10">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-muted-foreground">
           <Logo textClassName="text-base" markClassName="size-5" />
+          <nav className="flex items-center gap-5">
+            <Link href="/privacy" className="hover:text-foreground transition-colors">Privacy</Link>
+            <Link href="/terms" className="hover:text-foreground transition-colors">Terms</Link>
+          </nav>
           <span>© {new Date().getFullYear()} Events Partner. All rights reserved.</span>
         </div>
       </footer>
