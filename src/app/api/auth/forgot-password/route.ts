@@ -31,11 +31,13 @@ export async function POST(req: Request) {
 
   const token = await createPasswordResetToken(user.id)
   const url = `${process.env.NEXT_PUBLIC_APP_URL}/reset-password?token=${token}`
-  await sendEmail({
+  const sent = await sendEmail({
     to: user.email,
     subject: "Reset your Events Partner password",
     html: resetPasswordTemplate(user.name ?? "there", url),
   })
+  // The reply stays "ok" either way (it must not reveal whether an account exists), so record failures for the owner.
+  if (!sent.ok) console.error(`[forgot-password] email to the account owner failed via ${sent.provider}: ${sent.error}`)
 
   return NextResponse.json(reply)
 }
