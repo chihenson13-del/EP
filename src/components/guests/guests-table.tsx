@@ -49,7 +49,7 @@ const STATUS_VARIANT: Record<Guest["rsvpStatus"], "default" | "secondary" | "out
 /** Rows drawn at once. Search, filters, select-all and CSV export always work on the full list. */
 const PAGE_SIZE = 100
 
-export function GuestsTable({ eventId, eventSlug, guests }: { eventId: string; eventSlug: string; guests: Guest[] }) {
+export function GuestsTable({ eventId, eventSlug, guests, messengerLive = false }: { eventId: string; eventSlug: string; guests: Guest[]; messengerLive?: boolean }) {
   const [search, setSearch] = useState("")
   const [statusFilter, setStatusFilterState] = useState<string>("ALL")
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
@@ -245,6 +245,8 @@ export function GuestsTable({ eventId, eventSlug, guests }: { eventId: string; e
 
       <GuestFormDialog eventId={eventId} open={dialogOpen} onOpenChange={setDialogOpen} guest={editing} focusField={focusField} />
       <GuestDetailsSheet
+        eventId={eventId}
+        messengerLive={messengerLive}
         guest={details}
         open={!!details}
         onOpenChange={(open) => { if (!open) setDetailsId(null) }}

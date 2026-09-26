@@ -11,6 +11,11 @@ import sharp from "sharp"
 import { shrinkDataUrl, shrinkCanvasObjects, SHRINK_ABOVE_BYTES } from "../src/lib/shrink-image"
 import { isAdminEmail, effectiveRole } from "../src/lib/admin-emails"
 import { normalizeFacebookUrl } from "../src/lib/facebook"
+import { encryptSecret, decryptSecret, isValidMetaSignature, parseSignedRequest, hmacHex } from "../src/lib/messenger/crypto"
+import { buildOptInRef, parseOptInRef } from "../src/lib/messenger/optin"
+import { createState, verifyState } from "../src/lib/messenger/oauth-state"
+import { getMetaConfig } from "../src/lib/messenger/config"
+import { createHmac } from "crypto"
 import { withDesignImageUrls } from "../src/lib/design-images"
 import { parseTimeLabel, getEventWindow, windowsOverlap, getBookingStatus } from "../src/lib/booking-calendar"
 
@@ -178,6 +183,60 @@ t("facebook links: only https facebook.com / m.facebook.com / m.me profile links
     "https://user:pw@facebook.com/jane", "https://facebook.com/", "https://facebook.com/l.php?u=https://evil.com", "https://m.me/a/b", "", null]) {
     assert.equal(normalizeFacebookUrl(bad), null, String(bad))
   }
+})
+t("messenger: tokens round-trip through AES-GCM and tampering is rejected", () => {
+  const key = randomBytes(32)
+  const box = encryptSecret("EAAB-page-token", key)
+  assert.notEqual(box.includes("EAAB"), true)
+  assert.equal(decryptSecret(box, key), "EAAB-page-token")
+  assert.equal(decryptSecret(box, randomBytes(32)), null)
+  const parts = box.split(".")
+  parts[3] = Buffer.from("tampered").toString("base64url")
+  assert.equal(decryptSecret(parts.join("."), key), null)
+})
+t("messenger: webhook signatures must match the raw body and app secret", () => {
+  const body = Buffer.from('{"object":"page","entry":[]}')
+  const good = `sha256=${hmacHex("app-secret", body)}`
+  assert.equal(isValidMetaSignature(body, good, "app-secret"), true)
+  assert.equal(isValidMetaSignature(body, good, "other-secret"), false)
+  assert.equal(isValidMetaSignature(Buffer.from('{"object":"page"}'), good, "app-secret"), false)
+  assert.equal(isValidMetaSignature(body, null, "app-secret"), false)
+})
+t("messenger: signed_request (data deletion) is verified before it is trusted", () => {
+  const payload = Buffer.from(JSON.stringify({ algorithm: "HMAC-SHA256", user_id: "12345" })).toString("base64url")
+  const sig = createHmac("sha256", "app-secret").update(payload).digest("base64url")
+  assert.equal(parseSignedRequest(`${sig}.${payload}`, "app-secret")?.user_id, "12345")
+  assert.equal(parseSignedRequest(`${sig}.${payload}`, "wrong"), null)
+  assert.equal(parseSignedRequest("garbage", "app-secret"), null)
+})
+t("messenger: opt-in refs are alphanumeric, bound to one guest, and can't be forged", () => {
+  const before = process.env.AUTH_SECRET
+  process.env.AUTH_SECRET = "test-secret"
+  const ref = buildOptInRef("cmguest1234567890abc")
+  assert.match(ref, /^[a-z0-9]+$/)
+  assert.equal(parseOptInRef(ref), "cmguest1234567890abc")
+  assert.equal(parseOptInRef(ref.replace("cmguest1234567890abc", "cmguest0000000000abc")), null)
+  assert.equal(parseOptInRef("ep123x" + "0".repeat(20)), null)
+  const { state, nonce } = createState("user-a")
+  assert.equal(verifyState("user-a", state, nonce), true)
+  assert.equal(verifyState("user-b", state, nonce), false) // another account can't finish this OAuth flow
+  assert.equal(verifyState("user-a", state, "other-nonce"), false)
+  assert.equal(verifyState("user-a", null, nonce), false)
+  if (before === undefined) delete process.env.AUTH_SECRET; else process.env.AUTH_SECRET = before
+})
+t("messenger: integration is off unless explicitly enabled AND fully configured", () => {
+  const saved = { ...process.env }
+  for (const k of Object.keys(process.env)) if (k.startsWith("META_")) delete process.env[k]
+  assert.equal(getMetaConfig().live, false)
+  Object.assign(process.env, { META_APP_ID: "1", META_APP_SECRET: "s", META_REDIRECT_URI: "https://x.test/cb", META_GRAPH_API_VERSION: "v25.0",
+    META_WEBHOOK_VERIFY_TOKEN: "v", META_TOKEN_ENCRYPTION_KEY: randomBytes(32).toString("base64") })
+  assert.equal(getMetaConfig().live, false) // configured but META_MESSENGER_ENABLED not "true"
+  process.env.META_MESSENGER_ENABLED = "true"
+  assert.equal(getMetaConfig().live, true)
+  process.env.META_TOKEN_ENCRYPTION_KEY = "short"
+  assert.equal(getMetaConfig().live, false)
+  for (const k of Object.keys(process.env)) if (!(k in saved)) delete process.env[k]
+  Object.assign(process.env, saved)
 })
 const ta = async (name: string, fn: () => Promise<void>) => { await fn(); n++; console.log("ok -", name) }
 

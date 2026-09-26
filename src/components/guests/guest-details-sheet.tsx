@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { AddFacebookButton, FacebookProfileLink, MessageOnFacebookButton } from "@/components/guests/facebook-contact"
+import { OfficialMessengerPanel } from "@/components/guests/official-messenger-panel"
 
 export type GuestDetails = {
   id: string
@@ -23,8 +24,10 @@ const STATUS_LABEL: Record<GuestDetails["rsvpStatus"], string> = { PENDING: "Pen
 
 /** Read-only guest summary with the contact options. Editing still happens in the guest form. */
 export function GuestDetailsSheet({
-  guest, open, onOpenChange, onEdit, onAddFacebook,
+  eventId, messengerLive, guest, open, onOpenChange, onEdit, onAddFacebook,
 }: {
+  eventId: string
+  messengerLive: boolean
   guest: GuestDetails | null
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -71,6 +74,7 @@ export function GuestDetailsSheet({
                       ? <MessageOnFacebookButton url={guest.facebookProfileUrl} className="w-full" />
                       : <AddFacebookButton onClick={onAddFacebook} className="w-full border border-dashed" />}
                   </div>
+                  <OfficialMessengerPanel live={messengerLive} eventId={eventId} guestId={guest.id} guestName={guest.firstName} />
                 </dl>
                 {guest.facebookProfileUrl && (
                   <p className="text-xs text-muted-foreground">Opens Facebook so you can message {guest.firstName} yourself. Events Partner doesn&apos;t send Facebook messages.</p>

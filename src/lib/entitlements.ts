@@ -47,6 +47,8 @@ export const FEATURES = {
   ADVANCED_ANALYTICS: "advanced_analytics",
   ADVANCED_EXPORTS: "advanced_exports",
   FULL_CUSTOMIZATION: "full_customization",
+  /** Official Meta Messenger messaging. In NO plan yet: it will be a separately priced add-on (docs/meta-messenger-integration.md). */
+  META_MESSENGER: "meta_messenger_enabled",
 } as const
 
 export type Feature = (typeof FEATURES)[keyof typeof FEATURES]

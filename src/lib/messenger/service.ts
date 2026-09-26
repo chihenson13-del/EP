@@ -1,48 +1,29 @@
 /**
- * Messenger service: the single place Events Partner would talk to Meta's Messenger Platform.
+ * Messenger facade used by Guest Management. Two separate things live side by side:
  *
- * CURRENT RELEASE: API messaging is DISABLED. Nothing here calls any Meta API, needs Meta credentials, or returns
- * a made-up result. What organizers have today is the manual shortcut: a guest's saved Facebook profile link
- * (Guest.facebookProfileUrl) opens Facebook/Messenger, and the organizer writes and sends the message themselves.
- * Events Partner never claims that message was sent.
+ *  A. Facebook profile shortcut (always available): Guest.facebookProfileUrl + "Message on Facebook" opens Facebook
+ *     and the organizer messages the guest themselves. Events Partner sends nothing and records nothing.
  *
- * Automatic Messenger messages can only be added through an official Meta integration: a Meta app with the
- * approved permissions, OAuth for a connected Page, secure server-side token storage, webhooks, and Meta's own
- * recipient-eligibility rules (a Facebook profile URL alone does not make someone messageable through the API).
- * That integration would also need message templates, delivery/error handling from webhooks, opt-in handling,
- * audit logs, rate limiting and admin controls. None of it is active. Never replace it with scraping, browser
- * automation, collected Facebook passwords, or messaging from a personal account.
+ *  B. Official Meta Messenger integration (lib/messenger/meta-messenger-service.ts): OFF unless
+ *     META_MESSENGER_ENABLED=true and the Meta app is fully configured and approved. It never uses scraping,
+ *     browser automation, collected Facebook passwords, or personal-account messaging.
  */
+import { getMetaConfig } from "@/lib/messenger/config"
+import * as meta from "@/lib/messenger/meta-messenger-service"
+import { db } from "@/lib/db"
 
-/** Server-side switch. It stays false until the official integration above exists and Meta has approved it. */
-export const MESSENGER_FEATURE_ENABLED = false
-
-export type MessengerUnavailable = { ok: false; reason: "DISABLED"; message: string }
-
-export const MESSENGER_UNAVAILABLE: MessengerUnavailable = {
-  ok: false,
-  reason: "DISABLED",
-  message: "Messenger messaging isn't available. Use \"Message on Facebook\" to contact the guest yourself.",
+/** True only when the official integration is switched on and fully configured (server-side check). */
+export function isMessengerIntegrationLive(): boolean {
+  return getMetaConfig().live
 }
 
-export interface MessengerService {
-  /** Whether an organizer has a connected, approved Meta Page. */
-  isConnected(ownerId: string): Promise<boolean>
-  /** Send through the official API. Only ever reports success when Meta confirms it. */
-  sendMessage(input: { ownerId: string; eventId: string; guestId: string; text: string }): Promise<MessengerUnavailable>
-  /** Delivery state as reported by Meta webhooks. */
-  getConversationStatus(input: { ownerId: string; guestId: string }): Promise<MessengerUnavailable>
-}
-
-/** The only implementation in this release: every call reports "unavailable" and touches nothing external. */
-export const messengerService: MessengerService = {
-  async isConnected() {
-    return false
+export const messengerService = {
+  /** Whether this organizer has a connected Page (always false while the integration is off). */
+  async isConnected(ownerId: string): Promise<boolean> {
+    if (!isMessengerIntegrationLive()) return false
+    const c = await db.metaConnection.findUnique({ where: { userId: ownerId }, select: { status: true } })
+    return c?.status === "CONNECTED"
   },
-  async sendMessage() {
-    return MESSENGER_UNAVAILABLE
-  },
-  async getConversationStatus() {
-    return MESSENGER_UNAVAILABLE
-  },
+  getEligibility: meta.getEligibility,
+  sendMessage: meta.sendMessage,
 }

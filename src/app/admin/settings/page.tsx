@@ -5,6 +5,7 @@ import { ComingSoonBadge } from "@/components/addons/sms-coming-soon"
 import { SMS_ADDON, SMS_FEATURE_ENABLED } from "@/lib/addons"
 import { getMigrationStatus } from "@/lib/db-migrations"
 import { DatabaseUpdatesCard } from "@/components/admin/database-updates-card"
+import { MetaIntegrationStatus } from "@/components/admin/meta-integration-status"
 
 export default async function AdminSettingsPage() {
   await requireAdmin()
@@ -19,6 +20,8 @@ export default async function AdminSettingsPage() {
       <PlatformPaymentSettingsForm settings={JSON.parse(JSON.stringify(settings))} />
 
       <DatabaseUpdatesCard migrations={migrations} />
+
+      <MetaIntegrationStatus />
 
       <div className="rounded-xl border bg-card p-5 space-y-2">
         <div className="flex items-center justify-between gap-3">

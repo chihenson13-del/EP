@@ -1,6 +1,7 @@
 import { requireUser } from "@/lib/session"
 import { db } from "@/lib/db"
 import { hasUnlimitedAccount } from "@/lib/entitlements"
+import Link from "next/link"
 import { AccountSettingsForm } from "@/components/account/account-settings-form"
 
 export default async function AccountSettingsPage() {
@@ -17,6 +18,10 @@ export default async function AccountSettingsPage() {
         <p className="text-muted-foreground text-sm mt-1">Manage your profile, password, and branding.</p>
       </div>
       <AccountSettingsForm user={JSON.parse(JSON.stringify(user))} hasCoBranding={unlimited} />
+      <Link href="/dashboard/settings/integrations" className="block rounded-xl border bg-card p-4 hover:bg-secondary/40 transition-colors">
+        <p className="font-medium">Integrations</p>
+        <p className="text-sm text-muted-foreground">Meta / Messenger and other connected services.</p>
+      </Link>
     </div>
   )
 }

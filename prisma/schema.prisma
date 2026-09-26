@@ -48,6 +48,7 @@ model User {
 
   passwordResetTokens    PasswordResetToken[]
   importedCalendarEvents ImportedCalendarEvent[]
+  metaConnection         MetaConnection?
 }
 
 model Account {
@@ -366,6 +367,7 @@ model Guest {
   plusOnes    PlusOne[]
   answers     CustomAnswer[]
   chair       Chair?
+  messengerRecipient MessengerRecipient?
   messageLogs MessageLog[]
   checkInLogs CheckInLog[]
 
@@ -833,4 +835,104 @@ model PlatformSettings {
   paymentInstructions String?  @db.Text
   updatedAt           DateTime @updatedAt
   updatedById         String?
+}
+
+
+// ── Official Meta Messenger integration (DISABLED until META_MESSENGER_ENABLED and Meta approval) ─────────────
+// See docs/meta-messenger-integration.md. Tokens are stored only AES-256-GCM encrypted (src/lib/messenger/crypto.ts).
+
+enum MetaConnectionStatus {
+  PENDING_PAGE // OAuth done, organizer still has to choose which Page to connect
+  CONNECTED
+  NEEDS_RECONNECT // Meta rejected the token (expired / permission removed)
+  DISCONNECTED
+}
+
+/** One organizer's connected Facebook Page. Never shared between accounts. */
+model MetaConnection {
+  id                 String               @id @default(cuid())
+  userId             String               @unique
+  user               User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status             MetaConnectionStatus @default(PENDING_PAGE)
+  /// App-scoped ID of the Facebook user who connected (used only to honour Meta data-deletion requests).
+  metaUserId         String?
+  pageId             String?
+  pageName           String?
+  pageAccessTokenEnc String?              @db.Text
+  /// Pages returned by OAuth awaiting the organizer's choice (encrypted, short-lived).
+  pendingPagesEnc    String?              @db.Text
+  pendingExpiresAt   DateTime?
+  connectedAt        DateTime?
+  lastWebhookAt      DateTime?
+  lastError          String?
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+
+  @@index([pageId])
+  @@index([metaUserId])
+}
+
+/**
+ * A guest who opened a conversation with the organizer's Page through their personal m.me opt-in link.
+ * The PSID (Page-scoped ID) comes from Meta's webhook; a Facebook profile URL is never enough.
+ */
+model MessengerRecipient {
+  id            String    @id @default(cuid())
+  guestId       String    @unique
+  guest         Guest     @relation(fields: [guestId], references: [id], onDelete: Cascade)
+  ownerId       String
+  pageId        String
+  psid          String
+  optInSource   String // "M_ME_REF" (existing thread) or "GET_STARTED_REF" (new thread)
+  linkedAt      DateTime  @default(now())
+  /// Last time the guest messaged / clicked the link; opens Meta's 24-hour standard messaging window.
+  lastInboundAt DateTime?
+
+  @@unique([pageId, psid])
+  @@index([ownerId])
+}
+
+enum MessengerMessageStatus {
+  SENDING
+  SENT // Meta accepted the Send API request and returned a message_id
+  DELIVERED // reported by a message_deliveries webhook
+  READ // reported by a message_reads webhook
+  FAILED
+  UNAVAILABLE
+}
+
+model MessengerMessage {
+  id             String                 @id @default(cuid())
+  ownerId        String
+  eventId        String
+  guestId        String
+  pageId         String
+  idempotencyKey String                 @unique
+  metaMessageId  String?                @unique
+  status         MessengerMessageStatus @default(SENDING)
+  text           String                 @db.Text
+  errorCode      String?
+  createdAt      DateTime               @default(now())
+  sentAt         DateTime?
+  deliveredAt    DateTime?
+  readAt         DateTime?
+
+  @@index([ownerId, eventId])
+  @@index([guestId])
+}
+
+/** Webhook replay protection: each processed Meta event key is stored once. */
+model MetaWebhookEvent {
+  key        String   @id
+  receivedAt DateTime @default(now())
+
+  @@index([receivedAt])
+}
+
+/** Meta data-deletion requests (Facebook Login requirement) and their human-readable status page. */
+model MetaDataDeletionRequest {
+  confirmationCode String   @id
+  metaUserId       String
+  status           String // "COMPLETED"
+  createdAt        DateTime @default(now())
 }
