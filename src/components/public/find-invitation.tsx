@@ -94,9 +94,15 @@ export function FindInvitation({ slug, theme }: { slug: string; theme: ResolvedT
 }
 
 function Results({ result, theme, card, pending, onChoose }: { result: LookupResult; theme: ResolvedTheme; card: React.CSSProperties; pending: boolean; onChoose: (m: Match) => void }) {
-  if (result.kind === "too-short") return <Notice card={card}>Please type your full first name, or your first and last name.</Notice>
-  if (result.kind === "too-broad") return <Notice card={card}>Several invitations match that. Please type your first and last name.</Notice>
-  if (result.kind === "none") return <Notice card={card}>We couldn&apos;t find an invitation with that name. Check the spelling, or try your name exactly as the host would have written it.</Notice>
+  if (result.kind !== "matches") {
+    return (
+      <Notice card={card}>
+        {result.kind === "too-short" ? "Please type your full first name, or your first and last name."
+          : result.kind === "too-broad" ? "Several invitations match that. Please type your first and last name."
+            : "We couldn't find an invitation with that name. Check the spelling, or try your name exactly as the host would have written it."}
+      </Notice>
+    )
+  }
 
   if (result.matches.length === 1) {
     const m = result.matches[0]
