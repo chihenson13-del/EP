@@ -279,8 +279,16 @@ export function SeatingEditor({
     const drag = dragRef.current
     if (!drag) return
     if (moveFrame.current !== null) cancelAnimationFrame(moveFrame.current)
-    applyDrag()
+    // Only a pointer that moved during THIS drag counts: a plain tap must never re-apply an earlier drag's last
+    // position (that made a tapped table jump and saved the jump).
+    const moved = lastPointer.current !== null
+    if (moved) applyDrag()
+    lastPointer.current = null
     dragRef.current = null
+    if (!moved) {
+      historyRef.current.pop() // a tap, not a change: drop the undo step it opened
+      return
+    }
 
     // Save only what moved, not the whole floor plan.
     if (drag.kind === "group") {

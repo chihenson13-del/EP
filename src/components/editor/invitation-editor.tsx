@@ -71,6 +71,9 @@ const SHORTCUTS: Array<[string, string]> = [
   ["+ / − / 0", "Zoom in · out · fit"],
 ]
 
+/** Positions are kept to one decimal place (screen-to-canvas maths otherwise leaves values like 260.0000152). */
+const round1 = (v: number) => Math.round(v * 10) / 10
+
 function rotate(x: number, y: number, deg: number) {
   const r = (deg * Math.PI) / 180
   return { x: x * Math.cos(r) - y * Math.sin(r), y: x * Math.sin(r) + y * Math.cos(r) }
@@ -368,7 +371,7 @@ export function InvitationEditor({ eventId, design }: { eventId: string; design:
         }
       }
       setGuides(nextGuides)
-      const next = objectsRef.current.map((o) => { const s = drag.starts.get(o.id); return s ? { ...o, x: s.x + dx, y: s.y + dy } : o })
+      const next = objectsRef.current.map((o) => { const s = drag.starts.get(o.id); return s ? { ...o, x: round1(s.x + dx), y: round1(s.y + dy) } : o })
       objectsRef.current = next
       setObjects(next)
       return
@@ -391,7 +394,7 @@ export function InvitationEditor({ eventId, design }: { eventId: string; design:
       // Keep the opposite edge/corner where it was, in the element's own (rotated) frame.
       const anchor = (d: number, size: number) => (d === 1 ? 0 : d === -1 ? size : size / 2)
       const shift = rotate(anchor(drag.hx, o.width) - anchor(drag.hx, w), anchor(drag.hy, o.height) - anchor(drag.hy, h), o.rotation)
-      patch = { width: Math.round(w), height: Math.round(h), x: o.x + shift.x, y: o.y + shift.y }
+      patch = { width: Math.round(w), height: Math.round(h), x: round1(o.x + shift.x), y: round1(o.y + shift.y) }
       // Resizing a text box from a corner with Shift also scales the text.
       if (o.type === "text" && corner && pointer.shift) patch.fontSize = Math.max(4, Math.round((o.fontSize ?? 24) * (w / o.width)))
     } else {
@@ -405,7 +408,7 @@ export function InvitationEditor({ eventId, design }: { eventId: string; design:
       if (angle > 180) angle -= 360
       // Rotate around the centre: move the origin so the centre stays put.
       const nc = rotate(o.width / 2, o.height / 2, angle)
-      patch = { rotation: angle, x: cx - nc.x, y: cy - nc.y }
+      patch = { rotation: angle, x: round1(cx - nc.x), y: round1(cy - nc.y) }
     }
     const next = objectsRef.current.map((o) => (o.id === drag.id ? { ...o, ...patch } : o))
     objectsRef.current = next
@@ -415,9 +418,17 @@ export function InvitationEditor({ eventId, design }: { eventId: string; design:
   function finishDrag() {
     if (!dragRef.current) return
     if (moveFrame.current !== null) cancelAnimationFrame(moveFrame.current)
-    applyDrag()
+    // Only a pointer that actually moved during THIS drag counts — a plain click must never re-apply the last
+    // position of an earlier drag (that made a clicked element jump).
+    const moved = lastPointer.current !== null
+    if (moved) applyDrag()
+    lastPointer.current = null
     dragRef.current = null
     setGuides([])
+    if (!moved) {
+      historyRef.current.pop() // a click, not a change: drop the undo step it opened
+      return
+    }
     setDirty(true)
     setSaveFailed(false)
   }
