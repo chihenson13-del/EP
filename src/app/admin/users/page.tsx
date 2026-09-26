@@ -1,6 +1,7 @@
 import { formatDate } from "@/lib/timezone"
 import { requireAdmin } from "@/lib/session"
 import { db } from "@/lib/db"
+import { effectiveRole } from "@/lib/admin-emails"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 
@@ -36,7 +37,7 @@ export default async function AdminUsersPage() {
               <TableRow key={u.id}>
                 <TableCell className="font-medium">{u.name}</TableCell>
                 <TableCell className="text-sm text-muted-foreground">{u.email}</TableCell>
-                <TableCell><Badge variant={u.role === "ADMIN" ? "default" : "outline"}>{u.role}</Badge></TableCell>
+                <TableCell><Badge variant={effectiveRole(u.role, u.email) === "ADMIN" ? "default" : "outline"}>{effectiveRole(u.role, u.email)}</Badge></TableCell>
                 <TableCell>{u._count.events}</TableCell>
                 <TableCell>{u._count.purchases}</TableCell>
                 <TableCell className="space-x-1">

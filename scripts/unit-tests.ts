@@ -9,7 +9,7 @@ import { formatDate, formatDateTime, calendarDayOf, singaporeLocalToInstant, app
 import { randomBytes } from "node:crypto"
 import sharp from "sharp"
 import { shrinkDataUrl, shrinkCanvasObjects, SHRINK_ABOVE_BYTES } from "../src/lib/shrink-image"
-import { isAdminEmail } from "../src/lib/admin-emails"
+import { isAdminEmail, effectiveRole } from "../src/lib/admin-emails"
 import { withDesignImageUrls } from "../src/lib/design-images"
 import { parseTimeLabel, getEventWindow, windowsOverlap, getBookingStatus } from "../src/lib/booking-calendar"
 
@@ -153,6 +153,19 @@ t("admin emails: matches either variable, any case, comma lists, and never an em
   assert.equal(isAdminEmail(""), false)
   if (before[0] !== undefined) process.env.ADMIN_BOOTSTRAP_EMAIL = before[0]
   if (before[1] !== undefined) process.env.ADMIN_EMAILS = before[1]
+})
+t("admin emails: an ADMIN whose email is off the allowlist is a regular user", () => {
+  const before = [process.env.ADMIN_BOOTSTRAP_EMAIL, process.env.ADMIN_EMAILS]
+  process.env.ADMIN_BOOTSTRAP_EMAIL = "owner@example.com"
+  process.env.ADMIN_EMAILS = ""
+  assert.equal(effectiveRole("ADMIN", "Owner@Example.com"), "ADMIN")
+  assert.equal(effectiveRole("ADMIN", "former-admin@example.com"), "USER")
+  assert.equal(effectiveRole("ADMIN", null), "USER")
+  assert.equal(effectiveRole("USER", "owner@example.com"), "USER") // the list alone never grants admin here
+  process.env.ADMIN_EMAILS = " , "
+  assert.equal(isAdminEmail(" "), false) // blank entries in a comma list never match
+  if (before[0] !== undefined) process.env.ADMIN_BOOTSTRAP_EMAIL = before[0]; else delete process.env.ADMIN_BOOTSTRAP_EMAIL
+  if (before[1] !== undefined) process.env.ADMIN_EMAILS = before[1]; else delete process.env.ADMIN_EMAILS
 })
 const ta = async (name: string, fn: () => Promise<void>) => { await fn(); n++; console.log("ok -", name) }
 

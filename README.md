@@ -47,7 +47,7 @@ npm run db:seed
 npm run dev
 ```
 
-Open http://localhost:3000. Locally, register the account whose email matches `ADMIN_BOOTSTRAP_EMAIL` (or `ADMIN_EMAILS`) in `.env` to get admin access at `/admin`. On a deployed site, that email is promoted when it signs in with Google, because sign-up doesn't verify email addresses.
+Open http://localhost:3000. Locally, register the account whose email matches `ADMIN_BOOTSTRAP_EMAIL` (or `ADMIN_EMAILS`) in `.env` to get admin access at `/admin`. On a deployed site, that email is promoted when it signs in with Google, because sign-up doesn't verify email addresses. These two variables are the complete admin list: an account whose email isn't on it is never treated as an admin, even if it was one before.
 
 ## Optional integrations
 

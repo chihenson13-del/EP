@@ -6,7 +6,7 @@ import { PrismaAdapter } from "@auth/prisma-adapter"
 import bcrypt from "bcryptjs"
 import { db } from "@/lib/db"
 import { rateLimit, clearRateLimit, clientIp } from "@/lib/rate-limit"
-import { isAdminEmail } from "@/lib/admin-emails"
+import { isAdminEmail, effectiveRole } from "@/lib/admin-emails"
 
 const PROFILE_REFRESH_MS = 5 * 60 * 1000
 
@@ -95,7 +95,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     async jwt({ token, user, trigger, account }) {
       if (user) {
         token.id = user.id as string
-        token.role = (user as { role?: string }).role ?? "USER"
+        token.role = effectiveRole((user as { role?: string }).role ?? "USER", user.email)
         token.emailVerified = (user as { emailVerified?: Date | null }).emailVerified ?? null
         token.refreshedAt = Date.now()
         // Admin emails are promoted only when the provider has verified the address (Google), never on a password
@@ -103,6 +103,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         if (account && account.provider !== "credentials" && isAdminEmail(user.email) && token.role !== "ADMIN") {
           await db.user.update({ where: { id: user.id as string }, data: { role: "ADMIN" } })
           token.role = "ADMIN"
+        }
+        // An ADMIN whose email has been taken off the allowlist is demoted as soon as they sign in.
+        if ((user as { role?: string }).role === "ADMIN" && token.role !== "ADMIN") {
+          await db.user.update({ where: { id: user.id as string }, data: { role: "USER" } })
         }
       }
       // Profile fields are re-read from the database when the session is explicitly updated, or at most
@@ -114,7 +118,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token.refreshedAt = Date.now()
         const dbUser = await db.user.findUnique({ where: { id: token.id as string } })
         if (dbUser) {
-          token.role = dbUser.role
+          token.role = effectiveRole(dbUser.role, dbUser.email)
           token.emailVerified = dbUser.emailVerified
           token.name = dbUser.name
           token.picture = dbUser.image
