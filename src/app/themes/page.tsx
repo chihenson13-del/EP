@@ -1,25 +1,14 @@
 import Link from "next/link"
-import { unstable_cache } from "next/cache"
-import { db } from "@/lib/db"
+import { THEMES } from "@/lib/themes"
+import { getFont } from "@/lib/fonts"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Logo } from "@/components/brand/logo"
 import { ArrowRight, Crown } from "lucide-react"
 
-export const dynamic = "force-dynamic"
-
-/** Themes change rarely, so the gallery reads them from the data cache (refreshed every 5 minutes) instead of hitting the database on every visit. */
-const getThemes = unstable_cache(
-  () => db.eventTheme.findMany({ orderBy: [{ isPremium: "asc" }, { name: "asc" }] }),
-  ["themes-gallery"],
-  { revalidate: 300 }
-)
-
-type ThemeConfig = { primary: string; accent: string; background: string }
-
-export default async function ThemesGalleryPage() {
-  const themes = await getThemes()
+export default function ThemesGalleryPage() {
+  const themes = THEMES
 
   return (
     <div className="flex flex-col min-h-screen">
@@ -49,16 +38,19 @@ export default async function ThemesGalleryPage() {
       <section className="mx-auto max-w-7xl px-4 sm:px-6 pb-20 flex-1">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
           {themes.map((theme) => {
-            const config = theme.config as unknown as ThemeConfig
+            const c = theme.colors
+            const title = getFont(theme.fonts.title)
+            const body = getFont(theme.fonts.body)
             return (
-              <Card key={theme.id} className="overflow-hidden border-border/70 shadow-xs p-0">
-                <div className="h-28 flex" style={{ background: config.background }}>
-                  <div className="w-1/2 flex items-center justify-center">
-                    <span className="font-heading text-lg font-semibold" style={{ color: config.primary }}>
-                      Aa
-                    </span>
-                  </div>
-                  <div className="w-1/2" style={{ background: config.accent }} />
+              <Card key={theme.key} className="overflow-hidden border-border/70 shadow-xs p-0">
+                <div className="h-36 flex flex-col items-center justify-center gap-2 px-4" style={{ background: c.background, backgroundImage: c.backgroundImage }}>
+                  <span className="text-3xl leading-none" style={{ fontFamily: title.cssFamily, color: c.primary }}>Celebrate</span>
+                  <span className="text-[11px] uppercase tracking-[0.22em]" style={{ fontFamily: body.cssFamily, color: c.secondary }}>Save the date</span>
+                  <span className="px-4 py-1 text-xs font-medium" style={{
+                    fontFamily: body.cssFamily,
+                    borderRadius: theme.button.shape === "pill" ? 999 : theme.button.shape === "rounded" ? 8 : 0,
+                    ...(theme.button.variant === "outline" ? { border: `1px solid ${c.accent}`, color: c.accent } : { background: c.accent, color: c.accentText }),
+                  }}>RSVP</span>
                 </div>
                 <div className="p-5 space-y-2">
                   <div className="flex items-center justify-between gap-2">
@@ -70,7 +62,7 @@ export default async function ThemesGalleryPage() {
                     )}
                   </div>
                   <Badge variant="secondary" className="font-normal">{theme.category}</Badge>
-                  {theme.description && <p className="text-sm text-muted-foreground">{theme.description}</p>}
+                  <p className="text-sm text-muted-foreground">{theme.description}</p>
                 </div>
               </Card>
             )

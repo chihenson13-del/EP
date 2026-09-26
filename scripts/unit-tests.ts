@@ -11,6 +11,7 @@ import sharp from "sharp"
 import { shrinkDataUrl, shrinkCanvasObjects, SHRINK_ABOVE_BYTES } from "../src/lib/shrink-image"
 import { isAdminEmail, effectiveRole } from "../src/lib/admin-emails"
 import { normalizeFacebookUrl } from "../src/lib/facebook"
+import { validateRsvpPrompt, readRsvpPrompt, visibleRsvpOptions, DEFAULT_RSVP_PROMPT } from "../src/lib/rsvp-prompt"
 import { encryptSecret, decryptSecret, isValidMetaSignature, parseSignedRequest, hmacHex } from "../src/lib/messenger/crypto"
 import { buildOptInRef, parseOptInRef } from "../src/lib/messenger/optin"
 import { createState, verifyState } from "../src/lib/messenger/oauth-state"
@@ -237,6 +238,21 @@ t("messenger: integration is off unless explicitly enabled AND fully configured"
   assert.equal(getMetaConfig().live, false)
   for (const k of Object.keys(process.env)) if (!(k in saved)) delete process.env[k]
   Object.assign(process.env, saved)
+})
+t("rsvp prompt: editable question/answers are validated and old data falls back safely", () => {
+  assert.deepEqual(readRsvpPrompt(null), DEFAULT_RSVP_PROMPT)
+  assert.deepEqual(readRsvpPrompt({ rsvp: { question: "", options: [] } }), DEFAULT_RSVP_PROMPT)
+  const ok = validateRsvpPrompt({ question: "  Are you coming?  ", options: [{ id: "a", label: "Yes!", status: "ATTENDING" }, { id: "b", label: "No", status: "DECLINED" }, { id: "c", label: "Maybe", status: "MAYBE" }] })
+  assert.equal(ok.ok, true)
+  if (ok.ok) {
+    assert.equal(ok.data.question, "Are you coming?")
+    assert.equal(visibleRsvpOptions(ok.data, false).length, 2) // Maybe hidden when the event disallows it
+  }
+  assert.equal(validateRsvpPrompt({ question: "Q", options: [{ label: "Yes", status: "ATTENDING" }, { label: "Also yes", status: "ATTENDING" }] }).ok, false) // needs a "no"
+  assert.equal(validateRsvpPrompt({ question: "Q", options: [{ label: "Yes", status: "ATTENDING" }] }).ok, false) // at least two
+  assert.equal(validateRsvpPrompt({ question: "Q", options: [{ label: "Yes", status: "ATTENDING" }, { label: "No", status: "GONE" }] }).ok, false)
+  const dupIds = validateRsvpPrompt({ question: "Q", options: [{ id: "x", label: "Yes", status: "ATTENDING" }, { id: "x", label: "No", status: "DECLINED" }] })
+  assert.equal(dupIds.ok && new Set(dupIds.data.options.map((o) => o.id)).size, 2)
 })
 const ta = async (name: string, fn: () => Promise<void>) => { await fn(); n++; console.log("ok -", name) }
 

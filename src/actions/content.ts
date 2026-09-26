@@ -7,7 +7,12 @@ import { requireEventAccess } from "@/lib/event-access"
 import { getEventLimits, hasFeature, FEATURES } from "@/lib/entitlements"
 import { isSafeImageUrl, IMAGE_URL_ERROR } from "@/lib/image-url"
 import type { ActionResult } from "@/actions/events"
-import type { SectionType, Prisma } from "@prisma/client"
+import { Prisma, type SectionType } from "@prisma/client"
+import { getTheme, isThemeKey } from "@/lib/themes"
+import { isFontKey } from "@/lib/fonts"
+import { FONT_PAIRS } from "@/lib/font-pairs"
+import { FONT_ROLES } from "@/lib/theme-resolve"
+import { validateRsvpPrompt, type RsvpPrompt } from "@/lib/rsvp-prompt"
 
 function toJson(value: unknown): Prisma.InputJsonValue {
   return value as Prisma.InputJsonValue
@@ -70,23 +75,40 @@ export async function duplicateSection(eventId: string, sectionId: string): Prom
 
 // ── Theme ────────────────────────────────────────────────────────────────
 
-export async function setEventTheme(eventId: string, themeId: string): Promise<ActionResult> {
+/** Merge keys into EventPage.layout without losing the other settings stored there. */
+async function mergeLayout(eventId: string, patch: Record<string, unknown>) {
+  const page = await db.eventPage.findUnique({ where: { eventId }, select: { layout: true } })
+  const layout = { ...((page?.layout as Record<string, unknown> | null) ?? {}), ...patch }
+  await db.eventPage.upsert({ where: { eventId }, update: { layout: toJson(layout) }, create: { eventId, layout: toJson(layout) } })
+}
+
+async function revalidateInvitation(eventId: string) {
+  revalidatePath(`/dashboard/events/${eventId}/theme`)
+  revalidatePath(`/preview/${eventId}`)
+  const event = await db.event.findUnique({ where: { id: eventId }, select: { slug: true } })
+  if (event) revalidatePath(`/e/${event.slug}`)
+}
+
+/**
+ * Apply a structured theme (lib/themes.ts). Choosing a theme is a fresh start: earlier custom colors and font
+ * choices are cleared, otherwise they would keep overriding the new theme and it would look like nothing changed.
+ */
+export async function setEventTheme(eventId: string, themeKey: string): Promise<ActionResult> {
   const user = await requireUser()
   await requireEventAccess(user.id, eventId).catch(() => { throw new Error("NO_ACCESS") })
+  if (!isThemeKey(themeKey)) return { ok: false, error: "That theme doesn't exist." }
 
-  const theme = await db.eventTheme.findUniqueOrThrow({ where: { id: themeId } })
+  const theme = getTheme(themeKey)
   if (theme.isPremium) {
     const allowed = await hasFeature(user.id, eventId, FEATURES.PREMIUM_THEMES)
     if (!allowed) return { ok: false, error: "This is a Premium theme. Upgrade to use it." }
   }
 
-  await db.eventPage.upsert({
-    where: { eventId },
-    update: { themeId },
-    create: { eventId, themeId },
-  })
-  revalidatePath(`/dashboard/events/${eventId}/theme`)
-  revalidatePath(`/e`)
+  // Keep the legacy themeId pointing at the matching EventTheme row when one exists (older code paths read it).
+  const legacy = await db.eventTheme.findUnique({ where: { key: themeKey }, select: { id: true } })
+  await mergeLayout(eventId, { themeKey })
+  await db.eventPage.update({ where: { eventId }, data: { themeId: legacy?.id ?? null, colors: Prisma.DbNull, fonts: Prisma.DbNull } })
+  await revalidateInvitation(eventId)
   return { ok: true, data: undefined }
 }
 
@@ -96,30 +118,61 @@ export async function updateThemeColors(eventId: string, colors: Record<string, 
   const allowed = await hasFeature(user.id, eventId, FEATURES.ADVANCED_THEME_CUSTOMIZATION)
   if (!allowed) return { ok: false, error: "Custom colors require Premium or higher." }
 
+  const clean = Object.fromEntries(
+    Object.entries(colors).filter(([k, v]) => ["primary", "accent", "background"].includes(k) && /^#[0-9a-fA-F]{6}$/.test(v))
+  )
   await db.eventPage.upsert({
     where: { eventId },
-    update: { colors: toJson(colors) },
-    create: { eventId, colors: toJson(colors) },
+    update: { colors: Object.keys(clean).length ? toJson(clean) : Prisma.DbNull },
+    create: { eventId, colors: toJson(clean) },
   })
-  revalidatePath(`/dashboard/events/${eventId}/theme`)
-  revalidatePath(`/e`)
+  await revalidateInvitation(eventId)
   return { ok: true, data: undefined }
 }
 
-export async function updateThemeFonts(eventId: string, pairKey: string): Promise<ActionResult> {
+/**
+ * Fonts: either a quick pairing (pairKey sets heading + body) and/or per-role choices (title, heading, body,
+ * rsvp, button, schedule, venue). Only fonts that are actually loaded (FONT_REGISTRY) are accepted.
+ */
+export async function updateThemeFonts(eventId: string, input: string | { pairKey?: string | null; roles?: Record<string, string | null> }): Promise<ActionResult> {
   const user = await requireUser()
   await requireEventAccess(user.id, eventId).catch(() => { throw new Error("NO_ACCESS") })
   const allowed = await hasFeature(user.id, eventId, FEATURES.ADVANCED_THEME_CUSTOMIZATION)
-  if (!allowed) return { ok: false, error: "Custom font pairing requires Premium or higher." }
+  if (!allowed) return { ok: false, error: "Custom fonts require Premium or higher." }
 
-  await db.eventPage.upsert({
-    where: { eventId },
-    update: { fonts: toJson({ pairKey }) },
-    create: { eventId, fonts: toJson({ pairKey }) },
-  })
-  revalidatePath(`/dashboard/events/${eventId}/theme`)
-  revalidatePath(`/e`)
+  const page = await db.eventPage.findUnique({ where: { eventId }, select: { fonts: true } })
+  const current = ((page?.fonts as { pairKey?: string; roles?: Record<string, string> } | null) ?? {})
+  const next: { pairKey?: string; roles: Record<string, string> } = { pairKey: current.pairKey, roles: { ...(current.roles ?? {}) } }
+
+  const patch: { pairKey?: string | null; roles?: Record<string, string | null> } = typeof input === "string" ? { pairKey: input } : input
+  if (patch.pairKey !== undefined) {
+    if (patch.pairKey === null) delete next.pairKey
+    else if (FONT_PAIRS.some((p) => p.key === patch.pairKey)) { next.pairKey = patch.pairKey; next.roles = {} }
+    else return { ok: false, error: "That font pairing doesn't exist." }
+  }
+  for (const [role, key] of Object.entries(patch.roles ?? {})) {
+    if (!FONT_ROLES.some((r) => r.key === role)) return { ok: false, error: "Unknown text style." }
+    if (key === null) delete next.roles[role]
+    else if (isFontKey(key)) next.roles[role] = key
+    else return { ok: false, error: "That font isn't available." }
+  }
+
+  await db.eventPage.upsert({ where: { eventId }, update: { fonts: toJson(next) }, create: { eventId, fonts: toJson(next) } })
+  await revalidateInvitation(eventId)
   return { ok: true, data: undefined }
+}
+
+// ── RSVP question ─────────────────────────────────────────────────────────
+
+export async function updateRsvpPrompt(eventId: string, prompt: unknown): Promise<ActionResult<RsvpPrompt>> {
+  const user = await requireUser()
+  await requireEventAccess(user.id, eventId).catch(() => { throw new Error("NO_ACCESS") })
+  const parsed = validateRsvpPrompt(prompt)
+  if (!parsed.ok) return { ok: false, error: parsed.error }
+  await mergeLayout(eventId, { rsvp: parsed.data })
+  revalidatePath(`/dashboard/events/${eventId}/rsvp-questions`)
+  await revalidateInvitation(eventId)
+  return { ok: true, data: parsed.data }
 }
 
 // ── Schedule ─────────────────────────────────────────────────────────────

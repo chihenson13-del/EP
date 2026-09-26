@@ -1,6 +1,7 @@
 "use client"
 
 import { memo } from "react"
+import { designTextStyle } from "@/components/editor/text-style"
 import type { DesignObject } from "./types"
 
 // Memoised: while one element is dragged or edited, every other element keeps its reference and skips rendering.
@@ -30,13 +31,7 @@ export const DesignObjectNode = memo(function DesignObjectNode({
         {object.type === "text" && (
           <foreignObject width={object.width} height={object.height}>
             <div
-              style={{
-                width: "100%", height: "100%", display: "flex", alignItems: "center",
-                justifyContent: object.align === "left" ? "flex-start" : object.align === "right" ? "flex-end" : "center",
-                fontSize: object.fontSize ?? 24, color: object.color ?? "var(--brand-plum)", fontWeight: object.fontWeight ?? 600,
-                fontFamily: object.fontFamily ?? "inherit", textAlign: object.align ?? "center", whiteSpace: "pre-wrap", wordBreak: "break-word",
-                lineHeight: 1.2, padding: 4,
-              }}
+              style={designTextStyle(object)}
             >
               {object.text || "Text"}
             </div>

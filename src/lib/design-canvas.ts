@@ -1,4 +1,5 @@
 import { isSafeImageUrl } from "@/lib/image-url"
+import { isFontKey } from "@/lib/fonts"
 import type { CanvasData, DesignObject } from "@/components/editor/types"
 
 const MAX_OBJECTS = 200
@@ -48,6 +49,12 @@ export function sanitizeCanvas(input: unknown): { ok: true; data: CanvasData } |
       obj.color = color(o.color)
       obj.fontWeight = num(o.fontWeight, 600, 100, 900)
       obj.align = o.align === "left" || o.align === "right" ? o.align : "center"
+      if (isFontKey(o.fontKey)) obj.fontKey = o.fontKey
+      if (o.italic === true) obj.italic = true
+      if (typeof o.letterSpacing === "number") obj.letterSpacing = num(o.letterSpacing, 0, -0.1, 1)
+      if (typeof o.lineHeight === "number") obj.lineHeight = num(o.lineHeight, 1.2, 0.8, 3)
+      if (o.textTransform === "uppercase" || o.textTransform === "lowercase") obj.textTransform = o.textTransform
+      if (o.textShadow === true) obj.textShadow = true
     }
     if (type === "rect" || type === "ellipse") {
       obj.fill = color(o.fill)

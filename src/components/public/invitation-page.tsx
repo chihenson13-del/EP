@@ -1,4 +1,5 @@
-import { resolveTheme, fontPairStyle } from "@/lib/theme-resolve"
+import { resolveTheme, themeStyle } from "@/lib/theme-resolve"
+import { readRsvpPrompt } from "@/lib/rsvp-prompt"
 import { getEventTypeConfig } from "@/lib/event-types"
 import { hasFeature, FEATURES } from "@/lib/entitlements"
 import type { InvitationData } from "@/lib/invitation"
@@ -13,14 +14,14 @@ import { DesignCanvasView, hasVisibleDesign } from "@/components/public/design-c
  * (/preview/[eventId]) so a preview is always the real thing, never a mock.
  */
 export async function InvitationPage({ event }: { event: InvitationData }) {
-  const theme = resolveTheme(event.page?.theme?.config, event.page?.colors, event.page?.fonts)
+  const layout = (event.page?.layout ?? null) as { themeKey?: string } | null
+  const theme = resolveTheme({ themeKey: layout?.themeKey, legacyThemeKey: event.page?.theme?.key, colors: event.page?.colors, fonts: event.page?.fonts })
   const typeConfig = getEventTypeConfig(event.type)
   const [showBrandingFeature, gallery] = await Promise.all([
     hasFeature(event.ownerId, event.id, FEATURES.REMOVE_BRANDING),
     getGalleryForEvent(event.id),
   ])
   const showBranding = !showBrandingFeature
-  const fontStyle = fontPairStyle(theme.fontPair)
 
   const canvas = event.design?.canvasJson as { objects?: unknown } | null | undefined
   const designObjects = canvas?.objects
@@ -40,16 +41,14 @@ export async function InvitationPage({ event }: { event: InvitationData }) {
     coverImageUrl: null,
     personalizedRsvpOnly: event.personalizedRsvpOnly,
     rsvpDeadline: event.rsvpDeadline?.toISOString() ?? null,
+    rsvpQuestion: readRsvpPrompt(event.page?.layout).question,
     sections: event.sections.map((s) => ({ id: s.id, type: s.type, order: s.order, content: s.content as Record<string, unknown> })),
     scheduleItems: event.scheduleItems,
     galleryImages: gallery.map((g) => ({ id: g.id, url: g.url, caption: g.caption })),
   }
 
   return (
-    <div
-      style={{ backgroundColor: theme.background, color: theme.primary, ...fontStyle.style }}
-      className={`min-h-screen font-sans ${fontStyle.className}`}
-    >
+    <div style={themeStyle(theme)} className="min-h-screen" data-theme-key={theme.key}>
       {event.design && hasVisibleDesign(designObjects) && (
         <section className="px-4 pt-10 pb-2 max-w-2xl mx-auto">
           <DesignCanvasView width={event.design.width} height={event.design.height} objects={designObjects} />

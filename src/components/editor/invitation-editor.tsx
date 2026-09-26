@@ -16,6 +16,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { ImageUpload } from "@/components/shared/image-upload"
 import { DesignObjectNode } from "@/components/editor/design-object-node"
+import { FontPicker } from "@/components/content/font-picker"
 import type { DesignObject, CanvasData } from "@/components/editor/types"
 
 import { safe } from "@/lib/safe-action"
@@ -344,7 +345,26 @@ function ObjectPanel({
       {object.type === "text" && (
         <>
           <Field label="Text"><Textarea rows={3} value={object.text ?? ""} onChange={(e) => onChange({ text: e.target.value })} /></Field>
-          <Field label="Font size"><Input type="number" value={object.fontSize ?? 24} onChange={(e) => onChange({ fontSize: Number(e.target.value) })} /></Field>
+          <Field label="Font">
+            <FontPicker label="Font" value={object.fontKey ?? "playfair-display"} previewText={(object.text || "").slice(0, 24) || undefined} onChange={(fontKey) => onChange({ fontKey })} />
+          </Field>
+          <div className="grid grid-cols-2 gap-2">
+            <Field label="Size"><Input type="number" min={4} max={400} value={object.fontSize ?? 24} onChange={(e) => onChange({ fontSize: Number(e.target.value) })} /></Field>
+            <Field label="Weight">
+              <Select value={String(object.fontWeight ?? 600)} onValueChange={(v) => onChange({ fontWeight: Number(v) })}>
+                <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                <SelectContent>{[300, 400, 500, 600, 700, 800, 900].map((w) => <SelectItem key={w} value={String(w)}>{w}</SelectItem>)}</SelectContent>
+              </Select>
+            </Field>
+            <Field label="Letter spacing"><Input type="number" step={0.01} min={-0.1} max={1} value={object.letterSpacing ?? 0} onChange={(e) => onChange({ letterSpacing: Number(e.target.value) })} /></Field>
+            <Field label="Line height"><Input type="number" step={0.05} min={0.8} max={3} value={object.lineHeight ?? 1.2} onChange={(e) => onChange({ lineHeight: Number(e.target.value) })} /></Field>
+          </div>
+          <div className="flex flex-wrap gap-1">
+            <Button type="button" size="sm" variant={object.italic ? "secondary" : "outline"} aria-pressed={!!object.italic} onClick={() => onChange({ italic: !object.italic })}><span className="italic">I</span> Italic</Button>
+            <Button type="button" size="sm" variant={object.textTransform === "uppercase" ? "secondary" : "outline"} aria-pressed={object.textTransform === "uppercase"} onClick={() => onChange({ textTransform: object.textTransform === "uppercase" ? "none" : "uppercase" })}>AA</Button>
+            <Button type="button" size="sm" variant={object.textTransform === "lowercase" ? "secondary" : "outline"} aria-pressed={object.textTransform === "lowercase"} onClick={() => onChange({ textTransform: object.textTransform === "lowercase" ? "none" : "lowercase" })}>aa</Button>
+            <Button type="button" size="sm" variant={object.textShadow ? "secondary" : "outline"} aria-pressed={!!object.textShadow} onClick={() => onChange({ textShadow: !object.textShadow })}>Shadow</Button>
+          </div>
           <Field label="Color"><Input type="color" value={toHex(object.color, "#403447")} onChange={(e) => onChange({ color: e.target.value })} className="h-9 p-1" /></Field>
           <Field label="Alignment">
             <Select value={object.align ?? "center"} onValueChange={(v) => onChange({ align: v as DesignObject["align"] })}>
