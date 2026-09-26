@@ -52,6 +52,11 @@ type Gesture =
   | { kind: "pinch"; startDist: number; startMid: { x: number; y: number }; startView: { x: number; y: number; w: number; h: number } }
   | { kind: "marquee"; start: { x: number; y: number } }
 
+/** Pointer capture keeps a drag going when the finger leaves the item; harmless if the browser refuses it. */
+function capture(target: EventTarget | null, pointerId: number) {
+  try { (target as Element | null)?.setPointerCapture?.(pointerId) } catch { /* not capturable */ }
+}
+
 const tKey = (id: string) => `t:${id}`
 const oKey = (id: string) => `o:${id}`
 
@@ -196,7 +201,7 @@ export function SeatingEditor({
   }, [snapshot])
 
   const onPointerDownTable = useCallback((table: TableData, e: React.PointerEvent) => {
-    ;(e.target as Element).setPointerCapture(e.pointerId)
+    capture(e.target, e.pointerId)
     const key = tKey(table.id)
     if (e.shiftKey || e.metaKey || e.ctrlKey || selectToolRef.current) { toggleInGroup(key); return }
     if (groupRef.current.size > 1 && groupRef.current.has(key)) { startGroupDrag(e); return }
@@ -208,7 +213,7 @@ export function SeatingEditor({
   }, [snapshot, toggleInGroup, startGroupDrag, applyGroup])
 
   const onPointerDownObject = useCallback((obj: FloorObjectData, e: React.PointerEvent) => {
-    ;(e.target as Element).setPointerCapture(e.pointerId)
+    capture(e.target, e.pointerId)
     const key = oKey(obj.id)
     if (e.shiftKey || e.metaKey || e.ctrlKey || selectToolRef.current) { toggleInGroup(key); return }
     if (groupRef.current.size > 1 && groupRef.current.has(key)) { startGroupDrag(e); return }
@@ -220,7 +225,7 @@ export function SeatingEditor({
   }, [snapshot, toggleInGroup, startGroupDrag, applyGroup])
 
   const onPointerDownChair = useCallback((table: TableData, chairId: string, e: React.PointerEvent) => {
-    ;(e.target as Element).setPointerCapture(e.pointerId)
+    capture(e.target, e.pointerId)
     const chair = table.chairs.find((c) => c.id === chairId)
     if (!chair) return
     setGroup(new Set())
@@ -343,7 +348,7 @@ export function SeatingEditor({
   function handleSvgPointerDown(e: React.PointerEvent) {
     if (!isBackground(e.target)) return
     const svg = svgRef.current!
-    svg.setPointerCapture(e.pointerId)
+    capture(svg, e.pointerId)
     pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
     if (pointers.current.size >= 2) {
       const [a, b] = [...pointers.current.values()]
