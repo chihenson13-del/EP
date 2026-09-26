@@ -599,7 +599,7 @@ export function SeatingEditor({
   useEffect(() => { keysRef.current = { undo, redo, nudge, handleDeleteSelection, handleDuplicateTable, zoom, fitToScreen } })
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      const t = e.target as HTMLElement | null
+      const t = e.target instanceof HTMLElement ? e.target : null
       if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || t.closest('[role="dialog"], [role="menu"], [role="listbox"]'))) return
       const k = keysRef.current
       const mod = e.metaKey || e.ctrlKey

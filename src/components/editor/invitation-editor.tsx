@@ -669,7 +669,7 @@ export function InvitationEditor({ eventId, design }: { eventId: string; design:
   useEffect(() => { keys.current = { undo, redo, duplicateSelected, deleteSelected, copySelected, paste, reorder, nudge, zoom, fit } })
   useEffect(() => {
     const onDown = (e: KeyboardEvent) => {
-      const t = e.target as HTMLElement | null
+      const t = e.target instanceof HTMLElement ? e.target : null
       if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || t.closest('[role="dialog"], [role="menu"], [role="listbox"]'))) return
       if (e.key === " ") { spaceDown.current = true; if (e.target === document.body) e.preventDefault(); return }
       const k = keys.current
