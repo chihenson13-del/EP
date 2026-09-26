@@ -13,6 +13,7 @@ import { isFontKey } from "@/lib/fonts"
 import { FONT_PAIRS } from "@/lib/font-pairs"
 import { FONT_ROLES } from "@/lib/theme-resolve"
 import { validateRsvpPrompt, type RsvpPrompt } from "@/lib/rsvp-prompt"
+import { readRsvpButton, readRsvpForm, readRsvpSection, type RsvpButtonConfig, type RsvpFormConfig } from "@/lib/rsvp-settings"
 
 function toJson(value: unknown): Prisma.InputJsonValue {
   return value as Prisma.InputJsonValue
@@ -23,9 +24,13 @@ function toJson(value: unknown): Prisma.InputJsonValue {
 export async function updateSectionContent(eventId: string, sectionId: string, content: Record<string, unknown>): Promise<ActionResult> {
   const user = await requireUser()
   await requireEventAccess(user.id, eventId).catch(() => { throw new Error("NO_ACCESS") })
-  await db.eventSection.updateMany({ where: { id: sectionId, eventId }, data: { content: toJson(content) } })
+  const section = await db.eventSection.findFirst({ where: { id: sectionId, eventId }, select: { type: true } })
+  if (!section) return { ok: false, error: "Section not found." }
+  // The RSVP section has a fixed shape (heading, text, alignment, spacing, background); store only valid values.
+  const clean = section.type === "RSVP" ? readRsvpSection(content) : content
+  await db.eventSection.updateMany({ where: { id: sectionId, eventId }, data: { content: toJson(clean) } })
   revalidatePath(`/dashboard/events/${eventId}/website`)
-  revalidatePath(`/e`)
+  await revalidateInvitation(eventId)
   return { ok: true, data: undefined }
 }
 
@@ -173,6 +178,52 @@ export async function updateRsvpPrompt(eventId: string, prompt: unknown): Promis
   revalidatePath(`/dashboard/events/${eventId}/rsvp-questions`)
   await revalidateInvitation(eventId)
   return { ok: true, data: parsed.data }
+}
+
+// ── RSVP button, RSVP page and deadline ─────────────────────────────────
+
+async function revalidateRsvp(eventId: string) {
+  revalidatePath(`/dashboard/events/${eventId}/rsvp-questions`)
+  revalidatePath(`/dashboard/events/${eventId}/rsvps`)
+  await revalidateInvitation(eventId)
+}
+
+/** The RSVP NOW button on the invitation. Input is normalized field by field (unknown values fall back to defaults). */
+export async function updateRsvpButton(eventId: string, input: unknown): Promise<ActionResult<RsvpButtonConfig>> {
+  const user = await requireUser()
+  await requireEventAccess(user.id, eventId).catch(() => { throw new Error("NO_ACCESS") })
+  const clean = readRsvpButton({ rsvpButton: input })
+  await mergeLayout(eventId, { rsvpButton: clean })
+  await revalidateRsvp(eventId)
+  return { ok: true, data: clean }
+}
+
+/**
+ * What the RSVP page asks and how guests find their invitation. "Personal links only" is stored in the existing
+ * Event.personalizedRsvpOnly switch (the same one on the Settings page), so both pages always agree.
+ */
+export async function updateRsvpForm(eventId: string, input: unknown): Promise<ActionResult<RsvpFormConfig>> {
+  const user = await requireUser()
+  await requireEventAccess(user.id, eventId).catch(() => { throw new Error("NO_ACCESS") })
+  const clean = readRsvpForm({ rsvpForm: input })
+  const personalOnly = clean.lookup === "off"
+  await mergeLayout(eventId, { rsvpForm: { ...clean, lookup: personalOnly ? "name" : clean.lookup } })
+  await db.event.update({ where: { id: eventId }, data: { personalizedRsvpOnly: personalOnly } })
+  await revalidateRsvp(eventId)
+  return { ok: true, data: clean }
+}
+
+/** RSVP deadline (a calendar day, "YYYY-MM-DD", or null for none) and whether late replies are still accepted. */
+export async function updateRsvpDeadline(eventId: string, deadline: string | null, allowLateRsvp: boolean): Promise<ActionResult> {
+  const user = await requireUser()
+  await requireEventAccess(user.id, eventId).catch(() => { throw new Error("NO_ACCESS") })
+  if (deadline !== null && (typeof deadline !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(deadline) || Number.isNaN(new Date(deadline).getTime()))) {
+    return { ok: false, error: "Choose a valid date." }
+  }
+  await db.event.update({ where: { id: eventId }, data: { rsvpDeadline: deadline ? new Date(deadline) : null, allowLateRsvp: !!allowLateRsvp } })
+  revalidatePath(`/dashboard/events/${eventId}/settings`)
+  await revalidateRsvp(eventId)
+  return { ok: true, data: undefined }
 }
 
 // ── Schedule ─────────────────────────────────────────────────────────────

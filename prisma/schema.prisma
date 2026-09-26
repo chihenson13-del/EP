@@ -356,7 +356,14 @@ model Guest {
   rsvpToken       String     @unique @default(cuid())
   rsvpStatus      RsvpStatus @default(PENDING)
   numberAttending Int?
+  /// Last time the guest (or host) saved an RSVP.
   respondedAt     DateTime?
+  /// The answer text the guest picked, e.g. "Yes, I'll be there!" (the status above is what counts).
+  rsvpAnswer           String?
+  /// Optional message the guest left for the host.
+  rsvpMessage          String?   @db.Text
+  /// When the guest first responded (respondedAt keeps moving on each change).
+  rsvpFirstRespondedAt DateTime?
 
   checkedIn   Boolean   @default(false)
   checkedInAt DateTime?

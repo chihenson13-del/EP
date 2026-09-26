@@ -8,7 +8,7 @@ export default function robots(): MetadataRoute.Robots {
         userAgent: "*",
         allow: "/",
         // Private areas, and guest-facing invitation/RSVP links, which are meant for invited people only.
-        disallow: ["/dashboard", "/admin", "/api", "/checkout", "/print", "/preview", "/e/", "/rsvp/"],
+        disallow: ["/dashboard", "/admin", "/api", "/checkout", "/print", "/preview", "/e/", "/rsvp/", "/events/"],
       },
     ],
     sitemap: `${SITE_URL}/sitemap.xml`,

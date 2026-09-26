@@ -17,6 +17,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ImageUpload } from "@/components/shared/image-upload"
 import { DesignObjectNode } from "@/components/editor/design-object-node"
 import { FontPicker } from "@/components/content/font-picker"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { DeviceFrame, PhoneWidthPicker } from "@/components/events/device-preview"
 import type { DesignObject, CanvasData } from "@/components/editor/types"
 
 import { safe } from "@/lib/safe-action"
@@ -27,7 +29,10 @@ export function InvitationEditor({ eventId, design }: { eventId: string; design:
   const [objects, setObjects] = useState<DesignObject[]>(initial.objects ?? [])
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [viewBox, setViewBox] = useState({ x: -60, y: -60, w: design.width + 120, h: design.height + 120 })
-  const [preview, setPreview] = useState<"desktop" | "mobile">("desktop")
+  // The phone button opens the REAL published mobile layout (the same renderer guests get) at real phone widths.
+  const [phonePreview, setPhonePreview] = useState(false)
+  const [phoneWidth, setPhoneWidth] = useState<number>(390)
+  const [phoneNonce, setPhoneNonce] = useState(0)
   const [dirty, setDirty] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saveFailed, setSaveFailed] = useState(false)
@@ -118,6 +123,12 @@ export function InvitationEditor({ eventId, design }: { eventId: string; design:
   async function openPreview() {
     if (dirty && !(await save({ silent: true }))) return
     router.push(`/dashboard/events/${eventId}/preview`)
+  }
+
+  async function openPhonePreview() {
+    if (dirty && !(await save({ silent: true }))) return
+    setPhoneNonce((n) => n + 1)
+    setPhonePreview(true)
   }
 
   function toSvgPoint(clientX: number, clientY: number) {
@@ -246,7 +257,7 @@ export function InvitationEditor({ eventId, design }: { eventId: string; design:
   }
 
   const sortedObjects = [...objects].sort((a, b) => a.zIndex - b.zIndex)
-  const previewWidth = preview === "mobile" ? 375 : design.width
+  const previewWidth = design.width
 
   return (
     <div className="flex flex-col lg:h-[calc(100vh-6rem)]">
@@ -263,8 +274,8 @@ export function InvitationEditor({ eventId, design }: { eventId: string; design:
         <Button size="icon" variant="ghost" className="size-8" onClick={() => zoom(1.25)}><ZoomOut className="size-4" /></Button>
         <Button size="icon" variant="ghost" className="size-8" onClick={fit}><Maximize className="size-4" /></Button>
         <div className="h-5 w-px bg-border mx-1" />
-        <Button size="icon" variant={preview === "desktop" ? "secondary" : "ghost"} className="size-8" onClick={() => setPreview("desktop")}><Monitor className="size-4" /></Button>
-        <Button size="icon" variant={preview === "mobile" ? "secondary" : "ghost"} className="size-8" onClick={() => setPreview("mobile")}><Smartphone className="size-4" /></Button>
+        <Button size="icon" variant={phonePreview ? "ghost" : "secondary"} className="size-8" onClick={() => setPhonePreview(false)} aria-label="Design canvas"><Monitor className="size-4" /></Button>
+        <Button size="sm" variant={phonePreview ? "secondary" : "ghost"} className="h-8 px-2" onClick={openPhonePreview} disabled={saving} aria-label="Mobile preview"><Smartphone className="size-4" /> <span className="hidden md:inline">Mobile preview</span></Button>
         <div className="flex-1" />
         <Button size="sm" variant="outline" onClick={openPreview} disabled={saving}><Eye className="size-3.5" /> Preview</Button>
         <Button size="sm" onClick={() => save()} disabled={saving} variant={saveFailed ? "destructive" : "default"}>
@@ -285,7 +296,6 @@ export function InvitationEditor({ eventId, design }: { eventId: string; design:
             onPointerDown={() => setSelectedId(null)}
           >
             <rect x={0} y={0} width={design.width} height={design.height} fill="#ffffff" stroke="#00000015" />
-            {preview === "mobile" && <rect x={0} y={0} width={375} height={design.height} fill="none" stroke="var(--brand-purple-deep)" strokeDasharray="6 4" strokeWidth={1.5} />}
             {sortedObjects.map((obj) => (
               <DesignObjectNode
                 key={obj.id}
@@ -325,6 +335,17 @@ export function InvitationEditor({ eventId, design }: { eventId: string; design:
           )}
         </div>
       </div>
+
+      <Dialog open={phonePreview} onOpenChange={setPhonePreview}>
+        <DialogContent className="max-h-[96dvh] w-[calc(100vw-1rem)] max-w-[520px] overflow-y-auto p-4 sm:p-6">
+          <DialogHeader>
+            <DialogTitle>Mobile preview</DialogTitle>
+            <DialogDescription>Your saved invitation exactly as a guest&apos;s phone shows it. Scroll inside the phone to see every section.</DialogDescription>
+          </DialogHeader>
+          <PhoneWidthPicker value={phoneWidth} onChange={setPhoneWidth} />
+          <DeviceFrame key={`${phoneWidth}-${phoneNonce}`} src={`/preview/${eventId}?r=${phoneNonce}`} width={phoneWidth} kind="phone" />
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

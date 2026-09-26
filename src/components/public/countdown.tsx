@@ -30,11 +30,12 @@ export function Countdown({ target }: { target: string }) {
   ]
 
   return (
-    <div className="flex items-center justify-center gap-4 sm:gap-6">
+    // Four equal columns that shrink with the screen (never wider than the container, even at 320px).
+    <div className="mx-auto grid max-w-md grid-cols-4 gap-1.5 sm:gap-6" role="timer" aria-live="off">
       {units.map((u) => (
-        <div key={u.label} className="text-center">
-          <div className="font-heading text-3xl sm:text-4xl font-bold tabular-nums">{String(u.value).padStart(2, "0")}</div>
-          <div className="text-xs uppercase tracking-wide opacity-70">{u.label}</div>
+        <div key={u.label} className="min-w-0 text-center">
+          <div className="font-heading text-[clamp(1.5rem,8vw,2.25rem)] font-bold leading-tight tabular-nums">{String(u.value).padStart(2, "0")}</div>
+          <div className="text-[0.625rem] sm:text-xs uppercase tracking-wide opacity-70">{u.label}</div>
         </div>
       ))}
     </div>

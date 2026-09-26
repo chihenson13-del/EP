@@ -18,6 +18,8 @@ import { bulkDeleteGuests, bulkSetRsvpStatus, deleteGuest } from "@/actions/gues
 import { toCsv } from "@/lib/csv"
 
 import { safe } from "@/lib/safe-action"
+import { rsvpPath } from "@/lib/rsvp-settings"
+import { copyText } from "@/lib/copy-text"
 type Guest = {
   id: string
   firstName: string
@@ -140,9 +142,7 @@ export function GuestsTable({ eventId, eventSlug, guests, messengerLive = false 
   }
 
   function copyRsvpLink(token: string) {
-    const url = `${window.location.origin}/rsvp/${eventSlug}/${token}`
-    navigator.clipboard.writeText(url)
-    toast.success("RSVP link copied.")
+    void copyText(`${window.location.origin}${rsvpPath(eventSlug, token)}`, "RSVP link copied.")
   }
 
   return (

@@ -19,6 +19,8 @@ import { getMetaConfig } from "../src/lib/messenger/config"
 import { createHmac } from "crypto"
 import { withDesignImageUrls } from "../src/lib/design-images"
 import { parseTimeLabel, getEventWindow, windowsOverlap, getBookingStatus } from "../src/lib/booking-calendar"
+import { matchGuests, displayName, signRef, verifyRef, signSession, verifySession, verificationMatches } from "../src/lib/rsvp-lookup"
+import { readRsvpForm, readRsvpButton, readRsvpSection, lookupMode, rsvpDeadlineEnd, isRsvpClosed, rsvpPath } from "../src/lib/rsvp-settings"
 
 let n = 0
 const t = (name: string, fn: () => void) => { fn(); n++; console.log("ok -", name) }
@@ -302,5 +304,55 @@ async function asyncTests() {
     assert.equal(again.changed, false) // already small: nothing to do the second time
   })
 }
+
+
+t("rsvp lookup: only whole names or 4+ letter multi-word names match; results show a minimal name", () => {
+  process.env.AUTH_SECRET ||= "unit-test-secret"
+  const guests = [
+    { id: "g1", firstName: "Rench", lastName: "Salazar" },
+    { id: "g2", firstName: "Rench", lastName: "Santos" },
+    { id: "g3", firstName: "José", lastName: "Rizal" },
+  ]
+  assert.deepEqual(matchGuests("re", guests), { status: "too-short" })
+  assert.deepEqual(matchGuests("ab c", guests), { status: "too-short" })
+  assert.deepEqual(matchGuests("ren", guests), { status: "ok", matches: [] })
+  const both = matchGuests("rench", guests)
+  assert.equal(both.status === "ok" && both.matches.length, 2)
+  assert.equal(displayName("rench", guests[0]), "Rench S.")
+  assert.equal(displayName("Rench Salazar", guests[0]), "Rench Salazar")
+  const one = matchGuests("jose rizal", guests)
+  assert.deepEqual(one.status === "ok" && one.matches.map((g) => g.id), ["g3"])
+})
+
+t("rsvp lookup: signed references and sessions are bound to one event and can't be forged", () => {
+  process.env.AUTH_SECRET ||= "unit-test-secret"
+  const ref = signRef("g1", "evA")
+  assert.equal(verifyRef(ref, "evA"), "g1")
+  assert.equal(verifyRef(ref, "evB"), null)
+  assert.equal(verifyRef(signRef("g1", "evA", Date.now() - 16 * 60_000), "evA"), null)
+  const session = signSession("g1", "evA")
+  assert.equal(verifySession(session, "evA"), "g1")
+  const [encoded, signature] = session.split(".")
+  const forged = `${Buffer.from(Buffer.from(encoded, "base64url").toString().replace("g1", "g2")).toString("base64url")}.${signature}`
+  assert.equal(verifySession(forged, "evA"), null)
+  assert.ok(verificationMatches("1234", { email: null, phone: "+63 917 555 1234" }))
+  assert.ok(!verificationMatches("123", { email: null, phone: "+63 917 555 1234" }))
+})
+
+t("rsvp settings: safe defaults, one switch for personal-links-only, deadline covers the whole day", () => {
+  const form = readRsvpForm({})
+  assert.equal(lookupMode(form, true), "off")
+  assert.equal(lookupMode({ ...form, lookup: "off" }, false), "name")
+  const button = readRsvpButton({ rsvpButton: { text: " ", style: "weird", color: "red", borderWidth: 9 } })
+  assert.equal(button.text, "RSVP NOW")
+  assert.equal(button.style, "theme")
+  assert.equal(button.color, null)
+  assert.equal(readRsvpSection({ heading: "", align: "x" }).heading, "RSVP")
+  const deadline = new Date("2026-09-20")
+  assert.equal(rsvpDeadlineEnd(deadline).toISOString(), "2026-09-20T15:59:59.999Z")
+  assert.equal(isRsvpClosed({ rsvpDeadline: deadline, allowLateRsvp: false }, new Date("2026-09-20T15:00:00Z")), false)
+  assert.equal(isRsvpClosed({ rsvpDeadline: deadline, allowLateRsvp: false }, new Date("2026-09-20T16:30:00Z")), true)
+  assert.equal(rsvpPath("my-event", "tok"), "/events/my-event/rsvp/tok")
+})
 
 asyncTests().then(() => console.log(`\n${n} groups passed`)).catch((error) => { console.error(error); process.exit(1) })

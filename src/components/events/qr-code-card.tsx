@@ -6,6 +6,7 @@ import { toast } from "sonner"
 import { Copy, Download, Share2, Printer, ImageDown } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { copyText } from "@/lib/copy-text"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 
 /** 1600px with a 4-module quiet zone: sharp when printed up to ~13cm at 300dpi, and reliably scannable. */
@@ -15,25 +16,6 @@ const QR_OPTIONS = { errorCorrectionLevel: "Q" as const, margin: 4, color: { dar
 function fileName(url: string): string {
   const slug = url.split("/").filter(Boolean).pop() || "event"
   return `${slug.replace(/[^a-z0-9-]/gi, "-").slice(0, 60)}-qr-code.png`
-}
-
-/** Copy text with the Clipboard API, falling back to a hidden textarea for older/in-app browsers. */
-async function copyText(text: string): Promise<boolean> {
-  try {
-    await navigator.clipboard.writeText(text)
-    return true
-  } catch {
-    const ta = document.createElement("textarea")
-    ta.value = text
-    ta.setAttribute("readonly", "")
-    ta.style.position = "fixed"
-    ta.style.opacity = "0"
-    document.body.appendChild(ta)
-    ta.select()
-    const ok = document.execCommand("copy")
-    ta.remove()
-    return ok
-  }
 }
 
 const isIOS = () => typeof navigator !== "undefined" && (/iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1))

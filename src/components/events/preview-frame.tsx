@@ -6,7 +6,7 @@ import { ExternalLink, Monitor, Pencil, RefreshCw, Smartphone, Tablet } from "lu
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { PublishToggle } from "@/components/events/publish-toggle"
-import { cn } from "@/lib/utils"
+import { DeviceFrame, PhoneWidthPicker } from "@/components/events/device-preview"
 import type { EventStatus } from "@prisma/client"
 
 const DEVICES = {
@@ -25,14 +25,13 @@ export function PreviewFrame({
   eventId, slug, status, isPublic, canPublish,
 }: { eventId: string; slug: string; status: EventStatus; isPublic: boolean; canPublish: boolean }) {
   const [device, setDevice] = useState<Device>("mobile")
+  const [phoneWidth, setPhoneWidth] = useState<number>(DEVICES.mobile.width)
   const [nonce, setNonce] = useState(0)
-  const [loaded, setLoaded] = useState(false)
   const live = status === "PUBLISHED" && isPublic
 
-  const width = DEVICES[device].width
+  const width = device === "mobile" ? phoneWidth : DEVICES[device].width
 
   function reload() {
-    setLoaded(false)
     setNonce((n) => n + 1)
   }
 
@@ -63,25 +62,15 @@ export function PreviewFrame({
         {canPublish && status !== "ARCHIVED" && <PublishToggle eventId={eventId} status={status} />}
       </div>
 
-      <div className="rounded-2xl border bg-secondary/40 p-3 sm:p-6 flex justify-center overflow-x-auto">
-        <div
-          className={cn("relative bg-white shadow-lg overflow-hidden transition-[width] duration-200", width ? "rounded-[2rem] border-8 border-foreground/80" : "rounded-xl w-full")}
-          style={width ? { width, maxWidth: "100%" } : undefined}
-        >
-          {!loaded && (
-            <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/80 text-sm text-muted-foreground" role="status">
-              Loading your invitation…
-            </div>
-          )}
-          <iframe
-            key={`${device}-${nonce}`}
-            title="Invitation preview"
-            src={`/preview/${eventId}?r=${nonce}`}
-            onLoad={() => setLoaded(true)}
-            className="block w-full bg-white"
-            style={{ height: "min(78vh, 900px)", border: 0 }}
-          />
+      {device === "mobile" && (
+        <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+          <span>Phone width:</span>
+          <PhoneWidthPicker value={phoneWidth} onChange={setPhoneWidth} />
         </div>
+      )}
+
+      <div className="rounded-2xl border bg-secondary/40 p-3 sm:p-6 flex justify-center">
+        <DeviceFrame key={`${device}-${width}-${nonce}`} src={`/preview/${eventId}?r=${nonce}`} width={width} kind={device === "mobile" ? "phone" : device === "tablet" ? "tablet" : "desktop"} />
       </div>
     </div>
   )

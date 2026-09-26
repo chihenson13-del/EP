@@ -1,5 +1,5 @@
 import { resolveTheme, themeStyle } from "@/lib/theme-resolve"
-import { readRsvpPrompt } from "@/lib/rsvp-prompt"
+import { lookupMode, readRsvpButton, readRsvpForm, rsvpPath } from "@/lib/rsvp-settings"
 import { getEventTypeConfig } from "@/lib/event-types"
 import { hasFeature, FEATURES } from "@/lib/entitlements"
 import type { InvitationData } from "@/lib/invitation"
@@ -8,6 +8,7 @@ import { PublicEventView } from "@/components/public/public-event-view"
 import { MusicPlayer } from "@/components/public/music-player"
 import { BrandingFooter } from "@/components/public/branding-footer"
 import { DesignCanvasView, hasVisibleDesign } from "@/components/public/design-canvas-view"
+import { ZoomableDesign } from "@/components/public/zoomable-design"
 
 /**
  * The invitation as guests see it. Used by the public page (/e/[slug]) and the owner's preview
@@ -41,17 +42,26 @@ export async function InvitationPage({ event }: { event: InvitationData }) {
     coverImageUrl: null,
     personalizedRsvpOnly: event.personalizedRsvpOnly,
     rsvpDeadline: event.rsvpDeadline?.toISOString() ?? null,
-    rsvpQuestion: readRsvpPrompt(event.page?.layout).question,
+    rsvp: {
+      href: rsvpPath(event.slug),
+      button: readRsvpButton(event.page?.layout),
+      searchEnabled: lookupMode(readRsvpForm(event.page?.layout), event.personalizedRsvpOnly) !== "off",
+    },
+    hasMusicControl: !!(event.musicEnabled && event.musicYoutubeVideoId && event.musicShowControl),
     sections: event.sections.map((s) => ({ id: s.id, type: s.type, order: s.order, content: s.content as Record<string, unknown> })),
     scheduleItems: event.scheduleItems,
     galleryImages: gallery.map((g) => ({ id: g.id, url: g.url, caption: g.caption })),
   }
 
   return (
-    <div style={themeStyle(theme)} className="min-h-screen" data-theme-key={theme.key}>
+    // width:100% + max-width:100vw + overflow-x:clip is only the safety net: every section below is laid out to fit
+    // a 320px screen on its own (fluid type, wrapping text, full-width buttons, responsive images).
+    <div style={themeStyle(theme)} className="min-h-screen w-full max-w-[100vw] overflow-x-clip" data-theme-key={theme.key}>
       {event.design && hasVisibleDesign(designObjects) && (
-        <section className="px-4 pt-10 pb-2 max-w-2xl mx-auto">
-          <DesignCanvasView width={event.design.width} height={event.design.height} objects={designObjects} />
+        <section className="w-full px-4 pt-8 sm:pt-10 pb-2 max-w-2xl mx-auto">
+          <ZoomableDesign width={event.design.width}>
+            <DesignCanvasView width={event.design.width} height={event.design.height} objects={designObjects} />
+          </ZoomableDesign>
         </section>
       )}
       <PublicEventView event={viewEvent} theme={theme} typeLabel={typeConfig.label} />

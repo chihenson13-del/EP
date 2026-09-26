@@ -36,7 +36,7 @@ export function GuestDetailsSheet({
 }) {
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-full sm:max-w-md overflow-y-auto">
+      <SheetContent className="w-full data-[side=right]:w-full data-[side=right]:sm:max-w-md overflow-y-auto">
         {guest && (
           <>
             <SheetHeader>

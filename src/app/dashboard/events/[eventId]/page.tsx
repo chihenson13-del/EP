@@ -52,6 +52,7 @@ export default async function EventOverviewPage({ params }: { params: Promise<{ 
         <StatCard icon={XCircle} label="Declined" value={counts.DECLINED} tone="text-destructive" />
         <StatCard icon={Clock} label="Pending" value={counts.PENDING} tone="text-amber-600" />
       </div>
+      <p className="-mt-2 text-sm"><Link href={`/dashboard/events/${event.id}/rsvps`} className="font-medium text-primary hover:underline">View every guest&apos;s RSVP response →</Link></p>
 
       <div className="grid lg:grid-cols-2 gap-6">
         <Card>

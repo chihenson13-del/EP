@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils"
 import { LinkPending } from "@/components/shared/link-pending"
 import {
   LayoutDashboard, Globe, Palette, Wand2, Users, ListChecks, Armchair,
-  MessageSquareText, CalendarClock, Images, ScanLine, BarChart3, Settings, Crown, UserCog, Eye,
+  MessageSquareText, CalendarClock, Images, ScanLine, BarChart3, Settings, Crown, UserCog, Eye, ClipboardCheck,
 } from "lucide-react"
 import type { CollaboratorRole } from "@prisma/client"
 
@@ -17,7 +17,8 @@ const NAV = [
   { href: "/theme", label: "Theme", icon: Palette },
   { href: "/editor", label: "Invitation Editor", icon: Wand2 },
   { href: "/guests", label: "Guests", icon: Users },
-  { href: "/rsvp-questions", label: "RSVP Questions", icon: ListChecks },
+  { href: "/rsvps", label: "RSVP Responses", icon: ClipboardCheck },
+  { href: "/rsvp-questions", label: "RSVP Setup", icon: ListChecks },
   { href: "/seating", label: "Seating", icon: Armchair },
   { href: "/messaging", label: "Messaging", icon: MessageSquareText },
   { href: "/schedule", label: "Schedule", icon: CalendarClock },

@@ -20,6 +20,7 @@ export async function checkInGuest(eventId: string, guestId: string): Promise<Ac
   ])
 
   revalidatePath(`/dashboard/events/${eventId}/checkin`)
+  revalidatePath(`/dashboard/events/${eventId}/rsvps`)
   return { ok: true, data: { name: `${guest.firstName} ${guest.lastName ?? ""}`.trim() } }
 }
 
@@ -34,6 +35,7 @@ export async function undoCheckIn(eventId: string, guestId: string): Promise<Act
   ])
 
   revalidatePath(`/dashboard/events/${eventId}/checkin`)
+  revalidatePath(`/dashboard/events/${eventId}/rsvps`)
   return { ok: true, data: undefined }
 }
 

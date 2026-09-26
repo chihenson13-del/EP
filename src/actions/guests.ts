@@ -55,6 +55,7 @@ export async function upsertGuest(eventId: string, input: GuestInput): Promise<A
   }
 
   revalidatePath(`/dashboard/events/${eventId}/guests`)
+  revalidatePath(`/dashboard/events/${eventId}/rsvps`)
   return { ok: true, data: { id: guest.id } }
 }
 
@@ -63,6 +64,7 @@ export async function deleteGuest(eventId: string, guestId: string): Promise<Act
   await requireEventAccess(user.id, eventId).catch(() => { throw new Error("NO_ACCESS") })
   await db.guest.deleteMany({ where: { id: guestId, eventId } })
   revalidatePath(`/dashboard/events/${eventId}/guests`)
+  revalidatePath(`/dashboard/events/${eventId}/rsvps`)
   return { ok: true, data: undefined }
 }
 
@@ -71,6 +73,7 @@ export async function bulkDeleteGuests(eventId: string, guestIds: string[]): Pro
   await requireEventAccess(user.id, eventId).catch(() => { throw new Error("NO_ACCESS") })
   await db.guest.deleteMany({ where: { eventId, id: { in: guestIds } } })
   revalidatePath(`/dashboard/events/${eventId}/guests`)
+  revalidatePath(`/dashboard/events/${eventId}/rsvps`)
   return { ok: true, data: undefined }
 }
 
@@ -79,6 +82,7 @@ export async function bulkSetRsvpStatus(eventId: string, guestIds: string[], sta
   await requireEventAccess(user.id, eventId).catch(() => { throw new Error("NO_ACCESS") })
   await db.guest.updateMany({ where: { eventId, id: { in: guestIds } }, data: { rsvpStatus: status, respondedAt: new Date() } })
   revalidatePath(`/dashboard/events/${eventId}/guests`)
+  revalidatePath(`/dashboard/events/${eventId}/rsvps`)
   return { ok: true, data: undefined }
 }
 
@@ -146,6 +150,7 @@ export async function importGuests(eventId: string, rows: ImportRow[]): Promise<
   }
 
   revalidatePath(`/dashboard/events/${eventId}/guests`)
+  revalidatePath(`/dashboard/events/${eventId}/rsvps`)
   return { ok: true, data: { imported, skipped, invalidFacebook } }
 }
 

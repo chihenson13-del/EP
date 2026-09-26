@@ -13,6 +13,10 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import type { SectionType } from "@prisma/client"
 
 import { safe } from "@/lib/safe-action"
+import { readRsvpSection, type RsvpSectionContent } from "@/lib/rsvp-settings"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Label } from "@/components/ui/label"
+import Link from "next/link"
 import { useSingleFlight } from "@/lib/use-single-flight"
 type Section = { id: string; type: SectionType; order: number; visible: boolean; content: Record<string, unknown> }
 
@@ -22,7 +26,7 @@ const SECTION_LABELS: Record<SectionType, string> = {
   GIFT_INFO: "Gift Info", CUSTOM: "Custom", FOOTER: "Footer",
 }
 
-const EDITABLE_TYPES: SectionType[] = ["HERO", "HOST", "DESCRIPTION", "DRESS_CODE", "GIFT_INFO", "CUSTOM", "FOOTER", "FAQ"]
+const EDITABLE_TYPES: SectionType[] = ["HERO", "HOST", "DESCRIPTION", "DRESS_CODE", "GIFT_INFO", "CUSTOM", "FOOTER", "FAQ", "RSVP"]
 
 export function WebsiteBuilder({ eventId, sections }: { eventId: string; sections: Section[] }) {
   const [list, setList] = useState(sections)
@@ -161,6 +165,7 @@ function SectionContentEditor({ section, onSave, disabled }: { section: Section;
       </div>
     )
   }
+  if (section.type === "RSVP") return <RsvpSectionEditor section={section} onSave={onSave} disabled={disabled} />
   if (section.type === "FAQ") {
     const items = (draft.items as Array<{ q: string; a: string }>) ?? []
     return (
@@ -192,6 +197,40 @@ function SectionContentEditor({ section, onSave, disabled }: { section: Section;
     <div className="space-y-2">
       <Textarea placeholder="Text" value={(draft.text as string) ?? ""} onChange={(e) => setDraft({ ...draft, text: e.target.value })} />
       <Button size="sm" onClick={() => onSave(draft)} disabled={disabled}>Save</Button>
+    </div>
+  )
+}
+
+/** The RSVP section: heading, description, alignment, spacing and background. The button itself is set on RSVP Setup. */
+function RsvpSectionEditor({ section, onSave, disabled }: { section: Section; onSave: (content: Record<string, unknown>) => void; disabled: boolean }) {
+  const [draft, setDraft] = useState<RsvpSectionContent>(readRsvpSection(section.content))
+  const set = <K extends keyof RsvpSectionContent>(key: K, value: RsvpSectionContent[K]) => setDraft((d) => ({ ...d, [key]: value }))
+  const pick = <T extends string>(label: string, value: T, onChange: (v: T) => void, options: Array<[T, string]>) => (
+    <div className="space-y-1 min-w-0">
+      <Label className="text-xs">{label}</Label>
+      <Select value={value} onValueChange={(v) => onChange(v as T)}>
+        <SelectTrigger className="h-9 w-full"><SelectValue /></SelectTrigger>
+        <SelectContent>{options.map(([v, l]) => <SelectItem key={v} value={v}>{l}</SelectItem>)}</SelectContent>
+      </Select>
+    </div>
+  )
+  return (
+    <div className="space-y-3">
+      <div className="space-y-1"><Label className="text-xs">Heading</Label><Input value={draft.heading} maxLength={120} placeholder="We hope you can join us" onChange={(e) => set("heading", e.target.value)} /></div>
+      <div className="space-y-1"><Label className="text-xs">Description</Label><Textarea value={draft.text} maxLength={600} rows={2} placeholder="Please let us know if you'll be celebrating with us." onChange={(e) => set("text", e.target.value)} /></div>
+      <div className="grid gap-3 sm:grid-cols-3">
+        {pick("Alignment", draft.align, (v) => set("align", v), [["left", "Left"], ["center", "Center"], ["right", "Right"]])}
+        {pick("Spacing", draft.spacing, (v) => set("spacing", v), [["compact", "Compact"], ["normal", "Normal"], ["spacious", "Spacious"]])}
+        {pick("Background", draft.background, (v) => set("background", v), [["none", "Theme style"], ["surface", "Light panel"], ["accent", "Accent color"], ["custom", "Custom color"]])}
+      </div>
+      {draft.background === "custom" && (
+        <div className="flex items-center gap-2">
+          <input type="color" aria-label="Background color" value={draft.backgroundColor ?? "#f5efe6"} onChange={(e) => set("backgroundColor", e.target.value)} className="h-9 w-12 cursor-pointer rounded border bg-background p-1" />
+          <span className="text-sm text-muted-foreground">{draft.backgroundColor ?? "#f5efe6"}</span>
+        </div>
+      )}
+      <p className="text-xs text-muted-foreground">The RSVP deadline and the RSVP NOW button (text, colors, size, placement) are on <Link className="underline" href="rsvp-questions">RSVP Setup</Link>. Fonts and colors follow your theme.</p>
+      <Button size="sm" onClick={() => onSave({ ...draft, backgroundColor: draft.background === "custom" ? draft.backgroundColor ?? "#f5efe6" : draft.backgroundColor })} disabled={disabled}>Save</Button>
     </div>
   )
 }

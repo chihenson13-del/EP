@@ -12,6 +12,7 @@ import { messageBodyToHtml } from "@/lib/email-templates"
 import { sendMessageSchema, type SendMessageInput } from "@/lib/validations/messaging"
 import type { ActionResult } from "@/actions/events"
 import { SMS_FEATURE_ENABLED, SMS_UNAVAILABLE_MESSAGE } from "@/lib/addons"
+import { rsvpPath } from "@/lib/rsvp-settings"
 
 export async function sendMessage(input: SendMessageInput): Promise<ActionResult<{ sent: number; failed: number; skipped: number; scheduled: number; mock: boolean }>> {
   const user = await requireUser()
@@ -50,7 +51,7 @@ export async function sendMessage(input: SendMessageInput): Promise<ActionResult
       continue
     }
 
-    const rsvpUrl = `${process.env.NEXT_PUBLIC_APP_URL}/rsvp/${event.slug}/${guest.rsvpToken}`
+    const rsvpUrl = `${process.env.NEXT_PUBLIC_APP_URL}${rsvpPath(event.slug, guest.rsvpToken)}`
     const filledBody = fillMessageVariables(d.body, {
       name: guest.firstName,
       event: event.name,
