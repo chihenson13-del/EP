@@ -1,5 +1,5 @@
 import { isSafeImageUrl } from "@/lib/image-url"
-import { isFontKey } from "@/lib/fonts"
+import { isFontKey } from "@/lib/font-keys"
 import type { CanvasData, DesignObject } from "@/components/editor/types"
 
 const MAX_OBJECTS = 200

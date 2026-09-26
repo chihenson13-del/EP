@@ -21,6 +21,8 @@ import { withDesignImageUrls } from "../src/lib/design-images"
 import { parseTimeLabel, getEventWindow, windowsOverlap, getBookingStatus } from "../src/lib/booking-calendar"
 import { matchGuests, displayName, signRef, verifyRef, signSession, verifySession, verificationMatches } from "../src/lib/rsvp-lookup"
 import { checkInCode, readScannedCode } from "../src/lib/checkin-pass"
+import { FONT_KEYS, isFontKey } from "../src/lib/font-keys"
+import { readFileSync } from "node:fs"
 import { readRsvpForm, readRsvpButton, readRsvpSection, lookupMode, rsvpDeadlineEnd, isRsvpClosed, rsvpPath } from "../src/lib/rsvp-settings"
 
 let n = 0
@@ -368,6 +370,16 @@ t("check-in passes: signed per guest and event; RSVP links and codes are underst
   assert.deepEqual(readScannedCode("https://x.app/rsvp/my-party/cmuil9fwn000fl604pz8jtgvq?x=1", "e"), { kind: "token", token: "cmuil9fwn000fl604pz8jtgvq" })
   assert.deepEqual(readScannedCode("  cmuil9fwn000fl604pz8jtgvq ", "e"), { kind: "token", token: "cmuil9fwn000fl604pz8jtgvq" })
   assert.equal(readScannedCode("hello world", "e"), null)
+})
+
+t("font keys used for validation match the font registry exactly", () => {
+  // fonts.ts can only run inside the Next.js build (next/font), so compare against its source text.
+  const registry = [...readFileSync("src/lib/fonts.ts", "utf8").matchAll(/\bfont\("([a-z0-9-]+)"/g)].map((m) => m[1])
+  assert.ok(registry.length > 20)
+  assert.deepEqual([...FONT_KEYS].sort(), [...new Set(registry)].sort())
+  assert.equal(isFontKey("inter"), true)
+  assert.equal(isFontKey("comic-sans"), false)
+  assert.equal(isFontKey("__proto__"), false)
 })
 
 asyncTests().then(() => console.log(`\n${n} groups passed`)).catch((error) => { console.error(error); process.exit(1) })
