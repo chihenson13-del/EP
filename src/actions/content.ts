@@ -288,3 +288,35 @@ export async function toggleGalleryImageVisibility(eventId: string, id: string, 
   revalidatePath(`/dashboard/events/${eventId}/gallery`)
   return { ok: true, data: undefined }
 }
+
+/** Save an edited photo (cropped / rotated / filtered in the browser) and/or its caption. */
+export async function updateGalleryImage(eventId: string, id: string, patch: { url?: string; caption?: string | null }): Promise<ActionResult> {
+  const user = await requireUser()
+  await requireEventAccess(user.id, eventId).catch(() => { throw new Error("NO_ACCESS") })
+  const data: { url?: string; caption?: string | null } = {}
+  if (patch.url !== undefined) {
+    if (typeof patch.url !== "string" || !isSafeImageUrl(patch.url)) return { ok: false, error: IMAGE_URL_ERROR }
+    data.url = patch.url
+  }
+  if (patch.caption !== undefined) {
+    const caption = typeof patch.caption === "string" ? patch.caption.trim() : ""
+    if (caption.length > 200) return { ok: false, error: "Caption is too long (200 characters max)." }
+    data.caption = caption || null
+  }
+  const updated = await db.galleryImage.updateMany({ where: { id, eventId }, data })
+  if (!updated.count) return { ok: false, error: "Photo not found." }
+  revalidatePath(`/dashboard/events/${eventId}/gallery`)
+  await revalidateInvitation(eventId)
+  return { ok: true, data: undefined }
+}
+
+/** New photo order (ids of THIS event's photos, first to last). */
+export async function reorderGallery(eventId: string, orderedIds: string[]): Promise<ActionResult> {
+  const user = await requireUser()
+  await requireEventAccess(user.id, eventId).catch(() => { throw new Error("NO_ACCESS") })
+  const ids = Array.isArray(orderedIds) ? orderedIds.filter((x) => typeof x === "string").slice(0, 1000) : []
+  await db.$transaction(ids.map((id, order) => db.galleryImage.updateMany({ where: { id, eventId }, data: { order } })))
+  revalidatePath(`/dashboard/events/${eventId}/gallery`)
+  await revalidateInvitation(eventId)
+  return { ok: true, data: undefined }
+}

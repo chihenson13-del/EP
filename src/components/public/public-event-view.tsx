@@ -1,7 +1,7 @@
 "use client"
 
 import { formatDate } from "@/lib/timezone"
-import { Fragment, useMemo } from "react"
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Countdown } from "@/components/public/countdown"
 import { googleCalendarUrl, outlookCalendarUrl, icsFileContent } from "@/lib/calendar-links"
 import { safeHttpUrl } from "@/lib/image-url"
@@ -305,27 +305,76 @@ function SectionTitle({ title, theme, align = "center", color }: { title: string
 
 function Gallery({ images, theme }: { images: GalleryImage[]; theme: ResolvedTheme }) {
   const radius = RADIUS_PX[theme.radius]
+  const [open, setOpen] = useState<number | null>(null)
   // One column on small phones (≤379px), two on larger phones and tablets, three from medium screens up.
   return (
-    <div className={`grid grid-cols-1 min-[380px]:grid-cols-2 md:grid-cols-3 ${theme.gallery === "polaroid" ? "gap-5" : "gap-3"} max-w-3xl mx-auto`}>
-      {images.map((g, i) => {
-        // eslint-disable-next-line @next/next/no-img-element
-        const img = <img src={g.url} alt={g.caption ?? ""} loading="lazy" decoding="async" className="block w-full max-w-full h-auto aspect-square object-cover" style={
-          theme.gallery === "rounded" ? { borderRadius: Math.max(radius, 8) }
-            : theme.gallery === "arch" ? { borderRadius: "999px 999px 12px 12px", aspectRatio: "3 / 4" }
-              : theme.gallery === "circle" ? { borderRadius: "999px" }
-                : undefined
-        } />
-        if (theme.gallery === "polaroid") {
+    <>
+      <div className={`grid grid-cols-1 min-[380px]:grid-cols-2 md:grid-cols-3 ${theme.gallery === "polaroid" ? "gap-5" : "gap-3"} max-w-3xl mx-auto`}>
+        {images.map((g, i) => {
+          // eslint-disable-next-line @next/next/no-img-element
+          const img = <img src={g.url} alt={g.caption ?? ""} loading="lazy" decoding="async" className="block w-full max-w-full h-auto aspect-square object-cover" style={
+            theme.gallery === "rounded" ? { borderRadius: Math.max(radius, 8) }
+              : theme.gallery === "arch" ? { borderRadius: "999px 999px 12px 12px", aspectRatio: "3 / 4" }
+                : theme.gallery === "circle" ? { borderRadius: "999px" }
+                  : undefined
+          } />
+          const open_ = () => setOpen(i)
+          if (theme.gallery === "polaroid") {
+            return (
+              <figure key={g.id} className="min-w-0 bg-white p-2 pb-6 shadow-md" style={{ transform: `rotate(${i % 2 ? 1.2 : -1.2}deg)` }}>
+                <button type="button" className="block w-full cursor-zoom-in" onClick={open_} aria-label={`View photo ${i + 1}`}>{img}</button>
+                {g.caption && <figcaption className={`mt-2 text-center text-xs text-neutral-600 ${WRAP}`} style={{ fontFamily: "var(--font-title)" }}>{g.caption}</figcaption>}
+              </figure>
+            )
+          }
           return (
-            <figure key={g.id} className="min-w-0 bg-white p-2 pb-6 shadow-md" style={{ transform: `rotate(${i % 2 ? 1.2 : -1.2}deg)` }}>
-              {img}
-              {g.caption && <figcaption className={`mt-2 text-center text-xs text-neutral-600 ${WRAP}`} style={{ fontFamily: "var(--font-title)" }}>{g.caption}</figcaption>}
+            <figure key={g.id} className="min-w-0">
+              <button type="button" className="block w-full cursor-zoom-in" onClick={open_} aria-label={`View photo ${i + 1}`}>{img}</button>
+              {g.caption && <figcaption className={`mt-1.5 text-center text-xs opacity-75 ${WRAP}`}>{g.caption}</figcaption>}
             </figure>
           )
-        }
-        return <div key={g.id} className="min-w-0">{img}</div>
-      })}
+        })}
+      </div>
+      {open !== null && <Lightbox images={images} index={open} onIndex={setOpen} onClose={() => setOpen(null)} />}
+    </>
+  )
+}
+
+/** Full-screen photo viewer: swipe or arrow keys to move between photos, Esc or ✕ to close. */
+function Lightbox({ images, index, onIndex, onClose }: { images: GalleryImage[]; index: number; onIndex: (i: number) => void; onClose: () => void }) {
+  const start = useRef<number | null>(null)
+  const go = useCallback((d: number) => onIndex((index + d + images.length) % images.length), [index, images.length, onIndex])
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose()
+      if (e.key === "ArrowRight") go(1)
+      if (e.key === "ArrowLeft") go(-1)
+    }
+    const previous = document.body.style.overflow
+    document.body.style.overflow = "hidden"
+    window.addEventListener("keydown", onKey)
+    return () => { window.removeEventListener("keydown", onKey); document.body.style.overflow = previous }
+  }, [go, onClose])
+  const photo = images[index]
+  return (
+    <div className="fixed inset-0 z-[70] flex flex-col bg-black/95 text-white" role="dialog" aria-modal="true" aria-label="Photo viewer"
+      onPointerDown={(e) => { start.current = e.clientX }}
+      onPointerUp={(e) => { if (start.current !== null && Math.abs(e.clientX - start.current) > 50) go(e.clientX < start.current ? 1 : -1); start.current = null }}>
+      <div className="flex items-center justify-between p-3 pt-[max(0.75rem,env(safe-area-inset-top))] text-sm">
+        <span className="tabular-nums opacity-80">{index + 1} / {images.length}</span>
+        <button type="button" onClick={onClose} className="min-h-11 rounded-full bg-white/15 px-4 font-medium cursor-pointer" autoFocus>Close</button>
+      </div>
+      <div className="relative flex min-h-0 flex-1 items-center justify-center px-2">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={photo.url} alt={photo.caption ?? ""} className="max-h-full max-w-full object-contain select-none" draggable={false} />
+        {images.length > 1 && (
+          <>
+            <button type="button" onClick={() => go(-1)} className="absolute left-2 top-1/2 -translate-y-1/2 grid size-11 place-items-center rounded-full bg-white/15 cursor-pointer" aria-label="Previous photo">‹</button>
+            <button type="button" onClick={() => go(1)} className="absolute right-2 top-1/2 -translate-y-1/2 grid size-11 place-items-center rounded-full bg-white/15 cursor-pointer" aria-label="Next photo">›</button>
+          </>
+        )}
+      </div>
+      <p className={`min-h-14 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] text-center text-sm opacity-90 ${WRAP}`}>{photo.caption}</p>
     </div>
   )
 }
