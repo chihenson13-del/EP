@@ -43,6 +43,7 @@ export function sanitizeCanvas(input: unknown): { ok: true; data: CanvasData } |
       locked: o.locked === true ? true : undefined,
       hidden: o.hidden === true ? true : undefined,
     }
+    if (typeof o.opacity === "number" && o.opacity < 1) obj.opacity = num(o.opacity, 1, 0.05, 1)
     if (type === "text") {
       obj.text = typeof o.text === "string" ? o.text.slice(0, MAX_TEXT) : ""
       obj.fontSize = num(o.fontSize, 24, 4, 400)
@@ -68,6 +69,7 @@ export function sanitizeCanvas(input: unknown): { ok: true; data: CanvasData } |
         return { ok: false, error: "One of the images in the design is not supported (use PNG, JPG, WebP, GIF, or an http(s) link)." }
       }
       obj.src = src
+      if (typeof o.rx === "number" && o.rx > 0) obj.rx = num(o.rx, 0, 0, 2000)
     }
     objects.push(obj)
   }

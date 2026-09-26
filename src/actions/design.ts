@@ -10,7 +10,10 @@ import { shrinkCanvasObjects } from "@/lib/shrink-image"
 import type { ActionResult } from "@/actions/events"
 import type { Prisma } from "@prisma/client"
 
-export async function saveDesign(eventId: string, canvasJson: unknown): Promise<ActionResult<{ savedAt: string }>> {
+/** Canvas sizes the editor offers (width × height). Anything else is refused. */
+const CANVAS_SIZES = new Set(["1000x1400", "1080x1920", "1080x1080", "1400x1000"])
+
+export async function saveDesign(eventId: string, canvasJson: unknown, size?: { width: number; height: number }): Promise<ActionResult<{ savedAt: string }>> {
   const user = await requireUser()
   const role = await getEventAccessRole(user.id, eventId)
   if (role !== "OWNER" && role !== "COORDINATOR" && role !== "CLIENT") {
@@ -26,10 +29,11 @@ export async function saveDesign(eventId: string, canvasJson: unknown): Promise<
   const shrunk = await shrinkCanvasObjects(sanitized.data.objects)
   const json = { ...sanitized.data, objects: shrunk.objects } as unknown as Prisma.InputJsonValue
 
+  const sizeData = size && CANVAS_SIZES.has(`${size.width}x${size.height}`) ? { width: size.width, height: size.height } : {}
   const saved = await db.eventDesign.upsert({
     where: { eventId },
-    update: { canvasJson: json },
-    create: { eventId, canvasJson: json },
+    update: { canvasJson: json, ...sizeData },
+    create: { eventId, canvasJson: json, ...sizeData },
     select: { updatedAt: true },
   })
 

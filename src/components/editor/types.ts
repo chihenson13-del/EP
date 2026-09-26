@@ -11,6 +11,8 @@ export type DesignObject = {
   zIndex: number
   locked?: boolean
   hidden?: boolean
+  /** 0.05 … 1 (1 = solid; omitted when solid) */
+  opacity?: number
   // text
   text?: string
   fontSize?: number
@@ -33,6 +35,7 @@ export type DesignObject = {
   fill?: string
   stroke?: string
   strokeWidth?: number
+  /** Corner radius (shapes and photos) */
   rx?: number
 }
 

@@ -11,10 +11,15 @@ export function DesignCanvasView({ width, height, objects }: { width: number; he
     <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-auto rounded-xl shadow-sm bg-white" role="img" aria-label="Invitation design">
       <rect x={0} y={0} width={width} height={height} fill="#ffffff" />
       {visible.map((o) => (
-        <g key={o.id} transform={`translate(${o.x} ${o.y}) rotate(${o.rotation})`}>
+        <g key={o.id} transform={`translate(${o.x} ${o.y}) rotate(${o.rotation})`} opacity={o.opacity ?? 1}>
           {o.type === "rect" && <rect width={o.width} height={o.height} rx={o.rx ?? 0} fill={o.fill ?? "var(--brand-beige)"} stroke={o.stroke ?? "none"} strokeWidth={o.strokeWidth ?? 0} />}
           {o.type === "ellipse" && <ellipse cx={o.width / 2} cy={o.height / 2} rx={o.width / 2} ry={o.height / 2} fill={o.fill ?? "var(--brand-beige)"} stroke={o.stroke ?? "none"} strokeWidth={o.strokeWidth ?? 0} />}
-          {o.type === "image" && o.src && <image href={o.src} width={o.width} height={o.height} preserveAspectRatio="xMidYMid slice" />}
+          {o.type === "image" && o.src && (
+            <>
+              {(o.rx ?? 0) > 0 && <defs><clipPath id={`pub-clip-${o.id}`}><rect width={o.width} height={o.height} rx={o.rx} /></clipPath></defs>}
+              <image href={o.src} width={o.width} height={o.height} preserveAspectRatio="xMidYMid slice" clipPath={(o.rx ?? 0) > 0 ? `url(#pub-clip-${o.id})` : undefined} />
+            </>
+          )}
           {o.type === "text" && (
             <foreignObject width={o.width} height={o.height}>
               <div
