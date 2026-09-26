@@ -56,7 +56,8 @@ export async function InvitationPage({ event }: { event: InvitationData }) {
   return (
     // width:100% + max-width:100vw + overflow-x:clip is only the safety net: every section below is laid out to fit
     // a 320px screen on its own (fluid type, wrapping text, full-width buttons, responsive images).
-    <div style={themeStyle(theme)} className="min-h-screen w-full max-w-[100vw] overflow-x-clip" data-theme-key={theme.key}>
+    // Extra bottom space when the floating music control is shown, so it never covers the last button or text.
+    <div style={themeStyle(theme)} className={`min-h-screen w-full max-w-[100vw] overflow-x-clip ${viewEvent.hasMusicControl ? "pb-20" : ""}`} data-theme-key={theme.key}>
       {event.design && hasVisibleDesign(designObjects) && (
         <section className="w-full px-4 pt-8 sm:pt-10 pb-2 max-w-2xl mx-auto">
           <ZoomableDesign width={event.design.width}>

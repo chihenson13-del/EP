@@ -31,7 +31,7 @@ export function isDeadlinePassed(event: RsvpEvent): boolean {
  */
 export function RsvpShell({ event, theme, intro, children }: { event: RsvpEvent; theme: ResolvedTheme; intro: string; children: React.ReactNode }) {
   return (
-    <div style={themeStyle(theme)} className="min-h-dvh w-full overflow-x-clip px-4 py-10 sm:py-14">
+    <div style={themeStyle(theme)} className={`min-h-dvh w-full overflow-x-clip px-4 pt-10 sm:pt-14 ${event.musicEnabled && event.musicYoutubeVideoId && event.musicShowControl ? "pb-24" : "pb-10 sm:pb-14"}`}>
       <main className="mx-auto w-full max-w-lg space-y-6">
         {event.previewOnly && (
           <p className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">
