@@ -86,6 +86,16 @@ export const APP_MIGRATIONS: AppMigration[] = [
       `CREATE INDEX IF NOT EXISTS "AppError_lastSeenAt_idx" ON "AppError"("lastSeenAt")`,
     ],
   },
+  {
+    id: "2026-09-27_guest_photo_sharing",
+    description: "Guest photo sharing: marks photos a guest shared (and who shared them) until the host approves them (new columns; existing photos unchanged).",
+    statements: [
+      `ALTER TABLE "GalleryImage" ADD COLUMN IF NOT EXISTS "guestId" TEXT`,
+      `ALTER TABLE "GalleryImage" ADD COLUMN IF NOT EXISTS "pendingReview" BOOLEAN NOT NULL DEFAULT false`,
+      `CREATE INDEX IF NOT EXISTS "GalleryImage_eventId_pendingReview_idx" ON "GalleryImage"("eventId", "pendingReview")`,
+      `CREATE INDEX IF NOT EXISTS "GalleryImage_guestId_idx" ON "GalleryImage"("guestId")`,
+    ],
+  },
 ]
 
 async function ensureLedger(): Promise<void> {
