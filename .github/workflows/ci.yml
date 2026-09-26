@@ -1,0 +1,45 @@
+name: CI
+
+# Runs on every push and pull request: type-checks the whole app and runs the unit tests,
+# so a broken change shows a red cross on GitHub before (or as soon as) it reaches Vercel.
+on:
+  push:
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Type-check and unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      # Placeholders only: nothing here connects to a real database or sends anything.
+      DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
+      AUTH_SECRET: ci-only-not-a-real-secret
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        run: npm install --no-audit --no-fund
+
+      - name: Generate Prisma client and Next.js types
+        run: |
+          npx prisma generate
+          npx next typegen
+
+      - name: Type-check
+        run: npx tsc --noEmit
+
+      - name: Unit tests
+        run: npm test
