@@ -6,8 +6,10 @@ import { toast } from "sonner"
 import {
   Type, Square, Circle, ImageIcon, Undo2, Redo2, ZoomIn, ZoomOut, Maximize,
   Trash2, Copy, Lock, LockOpen, Eye, EyeOff, ChevronUp, ChevronDown, ArrowUpToLine, ArrowDownToLine,
-  Smartphone, Monitor, Save,
+  Smartphone, Monitor, Save, Tablet, Maximize2, Minimize2,
 } from "lucide-react"
+import { useFullscreen } from "@/lib/use-fullscreen"
+import { cn } from "@/lib/utils"
 import { saveDesign } from "@/actions/design"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -33,6 +35,8 @@ export function InvitationEditor({ eventId, design }: { eventId: string; design:
   const [phonePreview, setPhonePreview] = useState(false)
   const [phoneWidth, setPhoneWidth] = useState<number>(390)
   const [phoneNonce, setPhoneNonce] = useState(0)
+  const [device, setDevice] = useState<"phone" | "tablet" | "desktop">("phone")
+  const fullscreen = useFullscreen<HTMLDivElement>()
   const [dirty, setDirty] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saveFailed, setSaveFailed] = useState(false)
@@ -260,7 +264,7 @@ export function InvitationEditor({ eventId, design }: { eventId: string; design:
   const previewWidth = design.width
 
   return (
-    <div className="flex flex-col lg:h-[calc(100vh-6rem)]">
+    <div ref={fullscreen.ref} className={cn("flex flex-col lg:h-[calc(100vh-6rem)]", fullscreen.on && `${fullscreen.className} lg:h-dvh`)}>
       <div className="flex flex-wrap items-center gap-1.5 border-b bg-card p-2">
         <Button size="sm" variant="outline" onClick={() => addObject("text")}><Type className="size-3.5" /> Text</Button>
         <Button size="sm" variant="outline" onClick={() => addObject("rect")}><Square className="size-3.5" /> Shape</Button>
@@ -275,8 +279,11 @@ export function InvitationEditor({ eventId, design }: { eventId: string; design:
         <Button size="icon" variant="ghost" className="size-8" onClick={fit}><Maximize className="size-4" /></Button>
         <div className="h-5 w-px bg-border mx-1" />
         <Button size="icon" variant={phonePreview ? "ghost" : "secondary"} className="size-8" onClick={() => setPhonePreview(false)} aria-label="Design canvas"><Monitor className="size-4" /></Button>
-        <Button size="sm" variant={phonePreview ? "secondary" : "ghost"} className="h-8 px-2" onClick={openPhonePreview} disabled={saving} aria-label="Mobile preview"><Smartphone className="size-4" /> <span className="hidden md:inline">Mobile preview</span></Button>
+        <Button size="sm" variant={phonePreview ? "secondary" : "ghost"} className="h-8 px-2" onClick={openPhonePreview} disabled={saving} aria-label="Mobile preview"><Smartphone className="size-4" /> <span className="hidden md:inline">Device preview</span></Button>
         <div className="flex-1" />
+        <Button size="sm" variant="outline" onClick={fullscreen.toggle} title={fullscreen.on ? "Exit full screen" : "Full screen"} aria-pressed={fullscreen.on}>
+          {fullscreen.on ? <><Minimize2 className="size-3.5" /> Exit full screen</> : <><Maximize2 className="size-3.5" /> <span className="hidden sm:inline">Full screen</span></>}
+        </Button>
         <Button size="sm" variant="outline" onClick={openPreview} disabled={saving}><Eye className="size-3.5" /> Preview</Button>
         <Button size="sm" onClick={() => save()} disabled={saving} variant={saveFailed ? "destructive" : "default"}>
           <Save className="size-3.5" /> {saving ? "Saving..." : saveFailed ? "Save failed — retry" : dirty ? "Save changes" : "Saved"}
@@ -284,8 +291,8 @@ export function InvitationEditor({ eventId, design }: { eventId: string; design:
       </div>
 
       {/* Canvas above the properties panel on phones; side by side from lg up. */}
-      <div className="flex-1 flex flex-col lg:flex-row lg:min-h-0">
-        <div className="h-[55vh] lg:h-auto flex-1 bg-secondary/20 overflow-hidden flex items-center justify-center">
+      <div className={cn("flex-1 flex flex-col lg:flex-row lg:min-h-0", fullscreen.on && "min-h-0")}>
+        <div className={cn("h-[55vh] lg:h-auto flex-1 bg-secondary/20 overflow-hidden flex items-center justify-center", fullscreen.on && "h-auto min-h-0")}>
           <svg
             ref={svgRef}
             viewBox={`${viewBox.x} ${viewBox.y} ${viewBox.w} ${viewBox.h}`}
@@ -337,13 +344,25 @@ export function InvitationEditor({ eventId, design }: { eventId: string; design:
       </div>
 
       <Dialog open={phonePreview} onOpenChange={setPhonePreview}>
-        <DialogContent className="max-h-[96dvh] w-[calc(100vw-1rem)] max-w-[520px] overflow-y-auto p-4 sm:p-6">
+        <DialogContent className={cn("max-h-[96dvh] w-[calc(100vw-1rem)] overflow-y-auto p-4 sm:p-6", device === "phone" ? "sm:max-w-[520px]" : device === "tablet" ? "sm:max-w-[860px]" : "sm:max-w-[min(96vw,1240px)]")}>
           <DialogHeader>
-            <DialogTitle>Mobile preview</DialogTitle>
-            <DialogDescription>Your saved invitation exactly as a guest&apos;s phone shows it. Scroll inside the phone to see every section.</DialogDescription>
+            <DialogTitle>Preview on devices</DialogTitle>
+            <DialogDescription>Your saved invitation exactly as guests see it. Scroll inside the screen to see every section.</DialogDescription>
           </DialogHeader>
-          <PhoneWidthPicker value={phoneWidth} onChange={setPhoneWidth} />
-          <DeviceFrame key={`${phoneWidth}-${phoneNonce}`} src={`/preview/${eventId}?r=${phoneNonce}`} width={phoneWidth} kind="phone" />
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex rounded-lg border p-0.5" role="group" aria-label="Device">
+              {([["phone", Smartphone, "Phone"], ["tablet", Tablet, "Tablet"], ["desktop", Monitor, "Desktop"]] as const).map(([key, Icon, label]) => (
+                <Button key={key} size="sm" variant={device === key ? "secondary" : "ghost"} className="h-8" onClick={() => setDevice(key)} aria-pressed={device === key}><Icon className="size-4" /> {label}</Button>
+              ))}
+            </div>
+            {device === "phone" && <PhoneWidthPicker value={phoneWidth} onChange={setPhoneWidth} />}
+          </div>
+          <DeviceFrame
+            key={`${device}-${phoneWidth}-${phoneNonce}`}
+            src={`/preview/${eventId}?r=${phoneNonce}`}
+            width={device === "phone" ? phoneWidth : device === "tablet" ? 768 : null}
+            kind={device}
+          />
         </DialogContent>
       </Dialog>
     </div>
