@@ -119,14 +119,17 @@ export function readRsvpSection(content: unknown): RsvpSectionContent {
 }
 
 /**
- * How guests without a personal link find their invitation. The older event setting
- * "Require guests to use their personalized link" (Event.personalizedRsvpOnly) always wins and turns search off.
+ * How guests without a personal link find their invitation. Personal links always work in every mode.
+ *   "name"          — search by name; a confirmation (email / last 4 phone digits) is asked only for look-alike names
+ *   "name-verified" — search by name, and every guest confirms their email or phone before seeing their RSVP
+ *   "off"           — no name search: personal links only
+ * The event's existing switch Event.personalizedRsvpOnly ("only the invited guest can respond", ON by default)
+ * now means "name search must be verified", so events that had it ON get a working RSVP button whose search
+ * still only lets the real guest in. "off" is only used when the host explicitly picks "Personal links only".
  */
 export function lookupMode(form: RsvpFormConfig, personalizedRsvpOnly: boolean): RsvpLookup {
-  // personalizedRsvpOnly is the single switch for "personal links only", so the RSVP settings page and the
-  // event settings page can never disagree; the stored lookup only chooses between the two search modes.
-  if (personalizedRsvpOnly) return "off"
-  return form.lookup === "off" ? "name" : form.lookup
+  if (!personalizedRsvpOnly) return "name"
+  return form.lookup === "off" ? "off" : "name-verified"
 }
 
 /**

@@ -199,16 +199,15 @@ export async function updateRsvpButton(eventId: string, input: unknown): Promise
 }
 
 /**
- * What the RSVP page asks and how guests find their invitation. "Personal links only" is stored in the existing
- * Event.personalizedRsvpOnly switch (the same one on the Settings page), so both pages always agree.
+ * What the RSVP page asks and how guests find their invitation. The protection level is also mirrored into the
+ * existing Event.personalizedRsvpOnly switch (Settings page) so both pages always agree — see lookupMode().
  */
 export async function updateRsvpForm(eventId: string, input: unknown): Promise<ActionResult<RsvpFormConfig>> {
   const user = await requireUser()
   await requireEventAccess(user.id, eventId).catch(() => { throw new Error("NO_ACCESS") })
   const clean = readRsvpForm({ rsvpForm: input })
-  const personalOnly = clean.lookup === "off"
-  await mergeLayout(eventId, { rsvpForm: { ...clean, lookup: personalOnly ? "name" : clean.lookup } })
-  await db.event.update({ where: { id: eventId }, data: { personalizedRsvpOnly: personalOnly } })
+  await mergeLayout(eventId, { rsvpForm: clean })
+  await db.event.update({ where: { id: eventId }, data: { personalizedRsvpOnly: clean.lookup !== "name" } })
   await revalidateRsvp(eventId)
   return { ok: true, data: clean }
 }

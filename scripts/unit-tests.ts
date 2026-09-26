@@ -339,9 +339,11 @@ t("rsvp lookup: signed references and sessions are bound to one event and can't 
   assert.ok(!verificationMatches("123", { email: null, phone: "+63 917 555 1234" }))
 })
 
-t("rsvp settings: safe defaults, one switch for personal-links-only, deadline covers the whole day", () => {
+t("rsvp settings: safe defaults, protection levels, deadline covers the whole day", () => {
   const form = readRsvpForm({})
-  assert.equal(lookupMode(form, true), "off")
+  assert.equal(lookupMode(form, false), "name")
+  assert.equal(lookupMode(form, true), "name-verified") // the ON-by-default switch now means "verified search"
+  assert.equal(lookupMode({ ...form, lookup: "off" }, true), "off")
   assert.equal(lookupMode({ ...form, lookup: "off" }, false), "name")
   const button = readRsvpButton({ rsvpButton: { text: " ", style: "weird", color: "red", borderWidth: 9 } })
   assert.equal(button.text, "RSVP NOW")

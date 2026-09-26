@@ -251,8 +251,8 @@ function FormCard({ eventId, form }: Props) {
       <CardContent className="grid gap-6 lg:grid-cols-2">
         <div className="space-y-4">
           <Row label="How guests find their invitation" htmlFor="rsvp-lookup"
-            hint={cfg.lookup === "off" ? "Name search is turned off. Guests must use the personal link you send them." : cfg.lookup === "name-verified" ? "After choosing their name, guests confirm their email or the last 4 digits of their phone." : "Guests confirm their email or phone only when two invitations look alike."}>
-            <Choice id="rsvp-lookup" value={cfg.lookup} onChange={(v) => set("lookup", v)} options={[["name", "Search by name"], ["name-verified", "Search by name + confirm email/phone"], ["off", "Personal links only"]]} />
+            hint={cfg.lookup === "off" ? "Name search is turned off and the RSVP button is hidden. Guests must use the personal link you send them." : cfg.lookup === "name-verified" ? "After choosing their name, guests confirm the email or the last 4 digits of the phone number you saved for them. Guests with neither on file are asked to use their personal link." : "Anyone who knows a guest's name can open that guest's RSVP. Guests confirm their email or phone only when two invitations look alike."}>
+            <Choice id="rsvp-lookup" value={cfg.lookup} onChange={(v) => set("lookup", v)} options={[["name-verified", "Search by name + confirm email/phone (recommended)"], ["name", "Search by name only"], ["off", "Personal links only"]]} />
           </Row>
           <Row label="Message at the top of the RSVP page (optional)" htmlFor="rsvp-intro">
             <Textarea id="rsvp-intro" rows={3} maxLength={500} value={cfg.intro} onChange={(e) => set("intro", e.target.value)} placeholder="We can't wait to celebrate with you!" />

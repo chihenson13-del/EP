@@ -93,7 +93,7 @@ export function EventSettingsForm({ event }: { event: EventLike }) {
         <Field label="RSVP deadline"><Input type="date" value={form.rsvpDeadline} onChange={(e) => setForm({ ...form, rsvpDeadline: e.target.value })} /></Field>
         <ToggleField label="Allow late RSVPs after the deadline" checked={form.allowLateRsvp} onChange={(v) => setForm({ ...form, allowLateRsvp: v })} />
         <ToggleField label={'Allow "Maybe" responses'} checked={form.allowMaybe} onChange={(v) => setForm({ ...form, allowMaybe: v })} />
-        <ToggleField label="Require guests to use their personalized link" checked={form.personalizedRsvpOnly} onChange={(v) => setForm({ ...form, personalizedRsvpOnly: v })} />
+        <ToggleField label="Protect name search: guests confirm their email or phone before RSVPing (personal links always work; more options on RSVP Setup)" checked={form.personalizedRsvpOnly} onChange={(v) => setForm({ ...form, personalizedRsvpOnly: v })} />
         <Button onClick={save} disabled={loading}>{loading ? "Saving..." : "Save changes"}</Button>
       </TabsContent>
 
