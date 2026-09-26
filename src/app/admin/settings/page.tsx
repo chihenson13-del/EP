@@ -3,10 +3,12 @@ import { getDisplayPaymentSettings } from "@/lib/platform-settings"
 import { PlatformPaymentSettingsForm } from "@/components/admin/platform-payment-settings-form"
 import { ComingSoonBadge } from "@/components/addons/sms-coming-soon"
 import { SMS_ADDON, SMS_FEATURE_ENABLED } from "@/lib/addons"
+import { getMigrationStatus } from "@/lib/db-migrations"
+import { DatabaseUpdatesCard } from "@/components/admin/database-updates-card"
 
 export default async function AdminSettingsPage() {
   await requireAdmin()
-  const settings = await getDisplayPaymentSettings()
+  const [settings, migrations] = await Promise.all([getDisplayPaymentSettings(), getMigrationStatus()])
 
   return (
     <div className="space-y-6 max-w-xl">
@@ -15,6 +17,8 @@ export default async function AdminSettingsPage() {
         <p className="text-muted-foreground text-sm mt-1">Configure the payment QR code and receiving account customers see at checkout.</p>
       </div>
       <PlatformPaymentSettingsForm settings={JSON.parse(JSON.stringify(settings))} />
+
+      <DatabaseUpdatesCard migrations={migrations} />
 
       <div className="rounded-xl border bg-card p-5 space-y-2">
         <div className="flex items-center justify-between gap-3">
