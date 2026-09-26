@@ -20,6 +20,7 @@ import { createHmac } from "crypto"
 import { withDesignImageUrls } from "../src/lib/design-images"
 import { parseTimeLabel, getEventWindow, windowsOverlap, getBookingStatus } from "../src/lib/booking-calendar"
 import { matchGuests, displayName, signRef, verifyRef, signSession, verifySession, verificationMatches } from "../src/lib/rsvp-lookup"
+import { checkInCode, readScannedCode } from "../src/lib/checkin-pass"
 import { readRsvpForm, readRsvpButton, readRsvpSection, lookupMode, rsvpDeadlineEnd, isRsvpClosed, rsvpPath } from "../src/lib/rsvp-settings"
 
 let n = 0
@@ -355,6 +356,18 @@ t("rsvp settings: safe defaults, protection levels, deadline covers the whole da
   assert.equal(isRsvpClosed({ rsvpDeadline: deadline, allowLateRsvp: false }, new Date("2026-09-20T15:00:00Z")), false)
   assert.equal(isRsvpClosed({ rsvpDeadline: deadline, allowLateRsvp: false }, new Date("2026-09-20T16:30:00Z")), true)
   assert.equal(rsvpPath("my-event", "tok"), "/events/my-event/rsvp/tok")
+})
+
+t("check-in passes: signed per guest and event; RSVP links and codes are understood", () => {
+  process.env.AUTH_SECRET ||= "unit-test-secret"
+  const code = checkInCode("guestAbc123", "eventXyz789")
+  assert.deepEqual(readScannedCode(code, "eventXyz789"), { kind: "guest", guestId: "guestAbc123" })
+  assert.equal(readScannedCode(code, "otherEvent123"), null) // another event's pass is refused
+  assert.equal(readScannedCode(code.replace("guestAbc123", "guestAbc124"), "eventXyz789"), null) // edited pass is refused
+  assert.deepEqual(readScannedCode("https://x.app/events/my-party/rsvp/cmuil9fwn000fl604pz8jtgvq", "e"), { kind: "token", token: "cmuil9fwn000fl604pz8jtgvq" })
+  assert.deepEqual(readScannedCode("https://x.app/rsvp/my-party/cmuil9fwn000fl604pz8jtgvq?x=1", "e"), { kind: "token", token: "cmuil9fwn000fl604pz8jtgvq" })
+  assert.deepEqual(readScannedCode("  cmuil9fwn000fl604pz8jtgvq ", "e"), { kind: "token", token: "cmuil9fwn000fl604pz8jtgvq" })
+  assert.equal(readScannedCode("hello world", "e"), null)
 })
 
 asyncTests().then(() => console.log(`\n${n} groups passed`)).catch((error) => { console.error(error); process.exit(1) })

@@ -15,6 +15,7 @@ import type { RsvpOption } from "@/lib/rsvp-prompt"
 import type { RsvpFormConfig } from "@/lib/rsvp-settings"
 import { safe } from "@/lib/safe-action"
 import { useSingleFlight } from "@/lib/use-single-flight"
+import { CheckInPass } from "@/components/public/checkin-pass"
 
 type Question = {
   id: string
@@ -48,8 +49,10 @@ export type RsvpEventSummary = { name: string; dateLabel: string | null; venueNa
  * Which fields appear is set by the host on the RSVP settings page.
  */
 export function RsvpForm({
-  theme, mode, deadlinePassed, question, options, questions, guest, config, event,
+  theme, mode, deadlinePassed, question, options, questions, guest, config, event, checkInCode,
 }: {
+  /** Personal check-in pass shown to attending guests (a signed code, not the RSVP link). */
+  checkInCode?: string
   theme: ResolvedTheme
   mode: RsvpFormMode
   deadlinePassed: boolean
@@ -120,6 +123,7 @@ export function RsvpForm({
         <p className="font-medium">The RSVP deadline for this event has passed.</p>
         {saved && <p className="text-sm">Your saved response: <strong>{saved.label}</strong>{guest.rsvpStatus === "ATTENDING" && (guest.numberAttending ?? 1) > 1 ? ` · ${guest.numberAttending} guests` : ""}</p>}
         <p className="text-sm opacity-75">Please contact the host if your plans have changed.</p>
+        {checkInCode && guest.rsvpStatus === "ATTENDING" && <div className="pt-3"><CheckInPass code={checkInCode} guestName={guest.firstName} eventName={event.name} theme={theme} /></div>}
       </div>
     )
   }
@@ -140,6 +144,7 @@ export function RsvpForm({
           </>
         )}
         {choice && <p className="inline-block rounded-full px-4 py-1 text-sm font-medium" style={{ background: `color-mix(in oklab, ${theme.colors.accent}, transparent 85%)` }}>{choice.label}{status === "ATTENDING" && count > 1 ? ` · ${count} guests` : ""}</p>}
+        {checkInCode && status === "ATTENDING" && <CheckInPass code={checkInCode} guestName={guest.firstName} eventName={event.name} theme={theme} />}
         <EventDetails event={event} theme={theme} />
         <button type="button" className="w-full sm:w-auto px-5 py-2.5 text-sm font-medium cursor-pointer" style={{ ...buttonStyle(theme), background: "transparent", color: theme.colors.accent, borderColor: theme.colors.accent }} onClick={() => setDone(false)}>
           Update my response

@@ -2,6 +2,7 @@ import { getEventContext } from "@/lib/event-access"
 import { db } from "@/lib/db"
 import { readRsvpForm, rsvpPath } from "@/lib/rsvp-settings"
 import { SITE_URL } from "@/lib/site"
+import { checkInCode } from "@/lib/checkin-pass"
 import { RsvpResponses, type ResponseGuest, type RsvpSummary } from "@/components/guests/rsvp-responses"
 
 export const dynamic = "force-dynamic"
@@ -51,6 +52,7 @@ export default async function RsvpResponsesPage({ params }: { params: Promise<{ 
     rsvpFirstRespondedAt: g.rsvpFirstRespondedAt?.toISOString() ?? null,
     updatedAt: g.updatedAt.toISOString(),
     checkedInAt: g.checkedInAt?.toISOString() ?? null,
+    checkInCode: checkInCode(g.id, eventId),
     answers: g.answers.map((a) => ({ questionId: a.questionId, value: Array.isArray(a.value) ? a.value.map(String).join(", ") : a.value === null ? "" : String(a.value) })),
   }))
 

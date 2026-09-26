@@ -18,7 +18,8 @@ export function ExportButtons({ eventId }: { eventId: string }) {
         <DropdownMenuItem asChild><a href={`/api/events/${eventId}/export?type=seating`}>Seating report CSV</a></DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuLabel>Print</DropdownMenuLabel>
-        <DropdownMenuItem asChild><Link href={`/print/${eventId}/guests`} target="_blank"><Printer className="size-3.5" /> Printable guest list</Link></DropdownMenuItem>
+        <DropdownMenuItem asChild><Link href={`/print/${eventId}/guests`} target="_blank"><Printer className="size-3.5" /> Printable door list</Link></DropdownMenuItem>
+        <DropdownMenuItem asChild><Link href={`/print/${eventId}/passes`} target="_blank"><Printer className="size-3.5" /> Printable check-in passes</Link></DropdownMenuItem>
         <DropdownMenuItem asChild><Link href={`/print/${eventId}/seating`} target="_blank"><Printer className="size-3.5" /> Printable seating</Link></DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

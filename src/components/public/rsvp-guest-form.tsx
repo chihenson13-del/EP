@@ -4,6 +4,7 @@ import type { RsvpEvent, loadGuestForForm } from "@/lib/rsvp-page-data"
 import type { ResolvedTheme } from "@/lib/theme-resolve"
 import { RsvpForm, type RsvpFormMode } from "@/components/public/rsvp-form"
 import { isDeadlinePassed, rsvpSummary } from "@/components/public/rsvp-shell"
+import { checkInCode } from "@/lib/checkin-pass"
 
 type Loaded = NonNullable<Awaited<ReturnType<typeof loadGuestForForm>>>
 
@@ -38,6 +39,7 @@ export function RsvpGuestForm({ event, theme, loaded, mode }: { event: RsvpEvent
       }}
       config={readRsvpForm(event.page?.layout)}
       event={rsvpSummary(event)}
+      checkInCode={checkInCode(guest.id, event.id)}
     />
   )
 }

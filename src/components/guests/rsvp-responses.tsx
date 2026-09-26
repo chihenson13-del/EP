@@ -1,12 +1,14 @@
 "use client"
 
-import { useCallback, useMemo, useState, useTransition } from "react"
+import { useCallback, useEffect, useMemo, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import {
   Check, X, HelpCircle, CircleDashed, Search, SlidersHorizontal, Users, Mail, Phone, Pencil, Armchair, ScanLine,
-  Undo2, Send, Link as LinkIcon, Copy, ChevronRight, MessageSquareText, CheckSquare, Eye,
+  Undo2, Send, Link as LinkIcon, Copy, ChevronRight, MessageSquareText, CheckSquare, Eye, QrCode, Download,
 } from "lucide-react"
+import QRCode from "qrcode"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Checkbox } from "@/components/ui/checkbox"
 import { useLongPress, LONG_PRESS_CLASS } from "@/lib/use-long-press"
 import { GuestQuickActions, SelectionBar, SelectTick, type QuickAction } from "@/components/guests/guest-quick-actions"
@@ -55,6 +57,8 @@ export type ResponseGuest = {
   groupId: string | null
   checkedIn: boolean
   checkedInAt: string | null
+  /** Signed personal check-in pass (QR) for the door. */
+  checkInCode: string
   plusOnes: { id: string; name: string | null }[]
   answers: { questionId: string; value: string }[]
   chair: { seatNumber: number; table: { id: string; name: string } } | null
@@ -122,6 +126,8 @@ export function RsvpResponses({
   const [pending, startTransition] = useTransition()
   const [menuId, setMenuId] = useState<string | null>(null)
   const menuGuest = menuId ? guests.find((g) => g.id === menuId) ?? null : null
+  const [passId, setPassId] = useState<string | null>(null)
+  const passGuest = passId ? guests.find((g) => g.id === passId) ?? null : null
   const [selectMode, setSelectMode] = useState(false)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const selecting = selectMode || selected.size > 0
@@ -164,6 +170,7 @@ export function RsvpResponses({
       g.checkedIn
         ? { key: "checkin", label: "Undo check-in", icon: Undo2, onSelect: () => run(() => undoCheckIn(eventId, g.id), () => "Check-in undone.") }
         : { key: "checkin", label: "Check in", icon: ScanLine, onSelect: () => run(() => checkInGuest(eventId, g.id), (d) => `${d.name} checked in.`) },
+      { key: "pass", label: "Check-in QR code", icon: QrCode, hint: "Show, save or send their pass for the door", onSelect: () => setPassId(g.id) },
       { key: "table", label: g.chair ? `Change table (${g.chair.table.name})` : "Assign table", icon: Armchair, onSelect: () => openGuest(g.id) },
       { key: "copy-rsvp", label: "Copy RSVP link", icon: Copy, hint: "Their personal link to respond", onSelect: () => copyText(`${rsvpBaseUrl}/${g.rsvpToken}`, `${g.firstName}'s personal RSVP link copied.`) },
       { key: "copy-invite", label: "Copy invitation link", icon: LinkIcon, onSelect: () => copyText(invitationUrl, invitationLive ? "Invitation link copied." : "Invitation link copied. It opens for guests once the event is published.") },
@@ -451,6 +458,7 @@ export function RsvpResponses({
         onOpenChange={(o) => { if (!o) setOpenId(null) }}
         onEditGuest={() => { setEditing(open); setOpenId(null) }}
       />
+      <PassDialog guest={passGuest} onClose={() => setPassId(null)} />
       <GuestFormDialog eventId={eventId} open={!!editing} onOpenChange={(o) => { if (!o) setEditing(null) }} guest={editing} />
     </div>
   )
@@ -488,6 +496,7 @@ function GuestDrawer({
   const router = useRouter()
   const [pending, startTransition] = useTransition()
   const [editingRsvp, setEditingRsvp] = useState(startEditing)
+  const [showPass, setShowPass] = useState(false)
   const [form, setForm] = useState(() => ({
     status: guest?.rsvpStatus ?? "PENDING",
     count: guest ? Math.max(1, guest.numberAttending ?? 1) : 1,
@@ -611,7 +620,9 @@ function GuestDrawer({
               </Button>
               <Button variant="outline" onClick={() => copyText(invitationUrl, invitationLive ? "Invitation link copied." : "Invitation link copied. Note: it only opens for guests once the event is published.")}><LinkIcon className="size-4" /> Copy invite link</Button>
               <Button variant="outline" onClick={() => copyText(personalLink, `${guest.firstName}'s personal RSVP link copied.`)}><Copy className="size-4" /> Copy RSVP link</Button>
+              <Button variant="outline" className="col-span-2" onClick={() => setShowPass(true)}><QrCode className="size-4" /> Check-in QR code</Button>
             </div>
+            {showPass && <PassDialog guest={guest} onClose={() => setShowPass(false)} />}
             <Field label="Assign table">
               <Select value={guest.chair?.table.id ?? "__none"} disabled={pending || tables.length === 0}
                 onValueChange={(v) => run(() => setGuestTable(eventId, guest.id, v === "__none" ? null : v), (d) => d.seatNumber ? `Seated at seat ${d.seatNumber}.` : "Removed from table.")}>
@@ -631,5 +642,48 @@ function GuestDrawer({
         </div>
       </SheetContent>
     </Sheet>
+  )
+}
+
+/** A guest's check-in QR for the host: show it on screen, save it, or share it to the guest (e.g. in Messenger). */
+function PassDialog({ guest, onClose }: { guest: ResponseGuest | null; onClose: () => void }) {
+  const [src, setSrc] = useState<string | null>(null)
+  const code = guest?.checkInCode ?? null
+  useEffect(() => {
+    let alive = true
+    if (code) QRCode.toDataURL(code, { errorCorrectionLevel: "M", margin: 3, width: 720, color: { dark: "#1F1A24", light: "#FFFFFF" } }).then((u) => { if (alive) setSrc(u) }, () => undefined)
+    return () => { alive = false }
+  }, [code])
+  if (!guest) return null
+  const file = `check-in-${fullName(guest).replace(/[^a-z0-9]+/gi, "-").toLowerCase()}.png`
+
+  async function share() {
+    if (!src) return
+    try {
+      const blob = await (await fetch(src)).blob()
+      const f = new File([blob], file, { type: "image/png" })
+      const nav = navigator as Navigator & { canShare?: (d: { files: File[] }) => boolean }
+      if (nav.share && nav.canShare?.({ files: [f] })) await nav.share({ files: [f], title: `Check-in pass for ${guest!.firstName}` })
+      else toast.message("Sharing isn't available here. Use Save image instead.")
+    } catch { /* cancelled */ }
+  }
+
+  return (
+    <Dialog open onOpenChange={(o) => { if (!o) onClose() }}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle className="break-words">Check-in pass · {fullName(guest)}</DialogTitle>
+          <DialogDescription>Scan this at the door with Check-in → Scan. It only works for this guest at this event.</DialogDescription>
+        </DialogHeader>
+        <div className="mx-auto aspect-square w-full max-w-[16rem] overflow-hidden rounded-lg border bg-white">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          {src ? <img src={src} alt={`Check-in QR code for ${fullName(guest)}`} className="h-full w-full" /> : <div className="h-full w-full animate-pulse bg-muted" />}
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <Button variant="outline" asChild disabled={!src}><a href={src ?? undefined} download={file}><Download className="size-4" /> Save image</a></Button>
+          <Button variant="outline" onClick={share} disabled={!src}><Send className="size-4" /> Share</Button>
+        </div>
+      </DialogContent>
+    </Dialog>
   )
 }
