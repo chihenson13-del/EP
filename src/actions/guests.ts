@@ -9,6 +9,7 @@ import { guestSchema, customQuestionSchema, importRowSchema, type GuestInput, ty
 import type { ActionResult } from "@/actions/events"
 import type { RsvpStatus } from "@prisma/client"
 import { normalizeFacebookUrl } from "@/lib/facebook"
+import { readRsvpPrompt } from "@/lib/rsvp-prompt"
 
 export async function upsertGuest(eventId: string, input: GuestInput): Promise<ActionResult<{ id: string }>> {
   const user = await requireUser()
@@ -80,7 +81,25 @@ export async function bulkDeleteGuests(eventId: string, guestIds: string[]): Pro
 export async function bulkSetRsvpStatus(eventId: string, guestIds: string[], status: RsvpStatus): Promise<ActionResult> {
   const user = await requireUser()
   await requireEventAccess(user.id, eventId).catch(() => { throw new Error("NO_ACCESS") })
-  await db.guest.updateMany({ where: { eventId, id: { in: guestIds } }, data: { rsvpStatus: status, respondedAt: new Date() } })
+  if (!["PENDING", "ATTENDING", "DECLINED", "MAYBE"].includes(status)) return { ok: false, error: "Choose an RSVP status." }
+  const ids = Array.isArray(guestIds) ? guestIds.filter((id) => typeof id === "string").slice(0, 2000) : []
+  if (!ids.length) return { ok: true, data: undefined }
+
+  // Keep every RSVP field consistent with the new status (answer text, headcount, response times), exactly as
+  // if each guest had answered themselves. Only guests of THIS event are touched.
+  const page = await db.eventPage.findUnique({ where: { eventId }, select: { layout: true } })
+  const answer = readRsvpPrompt(page?.layout).options.find((o) => o.status === status)?.label ?? null
+  const where = { eventId, id: { in: ids } }
+  const now = new Date()
+  if (status === "PENDING") {
+    await db.guest.updateMany({ where, data: { rsvpStatus: "PENDING", rsvpAnswer: null, numberAttending: null, respondedAt: null } })
+  } else {
+    await db.$transaction([
+      db.guest.updateMany({ where, data: { rsvpStatus: status, rsvpAnswer: answer, respondedAt: now, ...(status === "ATTENDING" ? {} : { numberAttending: 0 }) } }),
+      ...(status === "ATTENDING" ? [db.guest.updateMany({ where: { ...where, OR: [{ numberAttending: null }, { numberAttending: { lt: 1 } }] }, data: { numberAttending: 1 } })] : []),
+      db.guest.updateMany({ where: { ...where, rsvpFirstRespondedAt: null }, data: { rsvpFirstRespondedAt: now } }),
+    ])
+  }
   revalidatePath(`/dashboard/events/${eventId}/guests`)
   revalidatePath(`/dashboard/events/${eventId}/rsvps`)
   return { ok: true, data: undefined }

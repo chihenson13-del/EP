@@ -1,12 +1,16 @@
 "use client"
 
-import { useMemo, useState, useTransition } from "react"
+import { useCallback, useMemo, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import {
   Check, X, HelpCircle, CircleDashed, Search, SlidersHorizontal, Users, Mail, Phone, Pencil, Armchair, ScanLine,
-  Undo2, Send, Link as LinkIcon, Copy, ChevronRight, MessageSquareText,
+  Undo2, Send, Link as LinkIcon, Copy, ChevronRight, MessageSquareText, CheckSquare, Eye,
 } from "lucide-react"
+import { Checkbox } from "@/components/ui/checkbox"
+import { useLongPress, LONG_PRESS_CLASS } from "@/lib/use-long-press"
+import { GuestQuickActions, SelectionBar, SelectTick, type QuickAction } from "@/components/guests/guest-quick-actions"
+import { bulkSetRsvpStatus } from "@/actions/guests"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -15,7 +19,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { GuestFormDialog } from "@/components/guests/guest-form-dialog"
-import { hostUpdateRsvp, resendInvitation, setGuestTable } from "@/actions/rsvp-admin"
+import { bulkSetCheckIn, hostUpdateRsvp, resendInvitation, setGuestTable } from "@/actions/rsvp-admin"
 import { checkInGuest, undoCheckIn } from "@/actions/checkin"
 import { formatDate, formatDateTime } from "@/lib/timezone"
 import { copyText } from "@/lib/copy-text"
@@ -109,9 +113,67 @@ export function RsvpResponses({
   const [sort, setSort] = useState<SortKey>("name-asc")
   const [visible, setVisible] = useState(PAGE)
   const [openId, setOpenId] = useState<string | null>(null)
+  const [drawerEdit, setDrawerEdit] = useState(false)
   const [editing, setEditing] = useState<ResponseGuest | null>(null)
   const [filtersOpen, setFiltersOpen] = useState(false)
   const open = openId ? guests.find((g) => g.id === openId) ?? null : null
+  // Press-and-hold menu + multi-select.
+  const router = useRouter()
+  const [pending, startTransition] = useTransition()
+  const [menuId, setMenuId] = useState<string | null>(null)
+  const menuGuest = menuId ? guests.find((g) => g.id === menuId) ?? null : null
+  const [selectMode, setSelectMode] = useState(false)
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const selecting = selectMode || selected.size > 0
+  const openMenu = useCallback((id: string) => setMenuId(id), [])
+  const press = useLongPress<string>(openMenu)
+  const openGuest = (id: string, edit = false) => { setDrawerEdit(edit); setOpenId(id) }
+  const toggle = (id: string) => setSelected((prev) => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next })
+  const stopSelecting = () => { setSelected(new Set()); setSelectMode(false) }
+
+  function run<T>(action: () => Promise<{ ok: true; data: T } | { ok: false; error: string }>, success: (data: T) => string | null, after?: () => void) {
+    startTransition(async () => {
+      const res = await safe(action())
+      if (!res.ok) return void toast.error(res.error)
+      const message = success(res.data)
+      if (message) toast.success(message)
+      after?.()
+      router.refresh()
+    })
+  }
+
+  function bulkStatus(status: Status, label: string) {
+    const ids = Array.from(selected)
+    run(() => bulkSetRsvpStatus(eventId, ids, status), () => `${ids.length} guest${ids.length === 1 ? "" : "s"} marked ${label}.`, stopSelecting)
+  }
+  function bulkCheckIn(checkedIn: boolean) {
+    const ids = Array.from(selected)
+    run(() => bulkSetCheckIn(eventId, ids, checkedIn), (d) => d.count ? `${d.count} guest${d.count === 1 ? "" : "s"} ${checkedIn ? "checked in" : "unchecked"}.` : "Nothing to change.", stopSelecting)
+  }
+
+  /** What the press-and-hold menu offers for one guest. */
+  function guestActions(g: ResponseGuest): QuickAction[] {
+    const isSelected = selected.has(g.id)
+    return [
+      { key: "details", label: "View details", icon: Eye, hint: "All RSVP answers", onSelect: () => openGuest(g.id) },
+      { key: "edit-rsvp", label: "Edit RSVP", icon: MessageSquareText, onSelect: () => openGuest(g.id, true) },
+      {
+        key: "select", label: isSelected ? "Unselect" : "Select", icon: CheckSquare, hint: isSelected ? undefined : "Choose several guests to update at once",
+        onSelect: () => { setSelectMode(true); toggle(g.id) },
+      },
+      g.checkedIn
+        ? { key: "checkin", label: "Undo check-in", icon: Undo2, onSelect: () => run(() => undoCheckIn(eventId, g.id), () => "Check-in undone.") }
+        : { key: "checkin", label: "Check in", icon: ScanLine, onSelect: () => run(() => checkInGuest(eventId, g.id), (d) => `${d.name} checked in.`) },
+      { key: "table", label: g.chair ? `Change table (${g.chair.table.name})` : "Assign table", icon: Armchair, onSelect: () => openGuest(g.id) },
+      { key: "copy-rsvp", label: "Copy RSVP link", icon: Copy, hint: "Their personal link to respond", onSelect: () => copyText(`${rsvpBaseUrl}/${g.rsvpToken}`, `${g.firstName}'s personal RSVP link copied.`) },
+      { key: "copy-invite", label: "Copy invitation link", icon: LinkIcon, onSelect: () => copyText(invitationUrl, invitationLive ? "Invitation link copied." : "Invitation link copied. It opens for guests once the event is published.") },
+      {
+        key: "resend", label: "Resend invitation", icon: Send, disabled: !g.email, hint: g.email ? `Email to ${g.email}` : "Add an email address first",
+        onSelect: () => run(() => resendInvitation(eventId, g.id), (d) => d.mock ? `Email isn't set up on this site yet, so nothing was delivered to ${d.to}.` : `Invitation emailed to ${d.to}.`),
+      },
+      { key: "edit-guest", label: "Edit guest", icon: Pencil, onSelect: () => setEditing(g) },
+    ]
+  }
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -198,7 +260,7 @@ export function RsvpResponses({
   )
 
   return (
-    <div className="space-y-5 min-w-0">
+    <div className={cn("space-y-5 min-w-0", selecting && "pb-40")}>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
         {cards.map((c) => {
           const active = c.key !== "ATTENDEES" && c.key === status
@@ -225,8 +287,11 @@ export function RsvpResponses({
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" aria-hidden />
             <Input placeholder="Search guest" aria-label="Search guest" value={search} onChange={(e) => { setSearch(e.target.value); setVisible(PAGE) }} className="pl-8" />
           </div>
-          <Button variant="outline" className="lg:hidden shrink-0" onClick={() => setFiltersOpen(true)}>
-            <SlidersHorizontal className="size-4" /> Filters{activeFilters ? ` (${activeFilters})` : ""}
+          <Button variant="outline" className="lg:hidden shrink-0 px-3" onClick={() => setFiltersOpen(true)} aria-label="Filters">
+            <SlidersHorizontal className="size-4" /> <span className="hidden min-[400px]:inline">Filters</span>{activeFilters ? ` (${activeFilters})` : ""}
+          </Button>
+          <Button variant="outline" className="xl:hidden shrink-0 px-3" onClick={() => setSelectMode(true)} disabled={selecting || filtered.length === 0} aria-label="Select guests">
+            <CheckSquare className="size-4" /> <span className="hidden min-[400px]:inline">Select</span>
           </Button>
         </div>
         <div className="hidden lg:grid grid-cols-4 gap-3">{filterControls}</div>
@@ -247,19 +312,21 @@ export function RsvpResponses({
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-10"><Checkbox checked={shown.length > 0 && shown.every((g) => selected.has(g.id))} onCheckedChange={(c) => setSelected(c ? new Set(filtered.map((g) => g.id)) : new Set())} aria-label="Select all guests" /></TableHead>
                   <TableHead>Guest</TableHead>
                   <TableHead>RSVP</TableHead>
                   <TableHead className="text-center">Guests</TableHead>
                   <TableHead>Response date</TableHead>
                   <TableHead>Check-in</TableHead>
                   <TableHead>Table</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
+                  <TableHead className="w-12"><span className="sr-only">Details</span></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {shown.map((g) => (
-                  <TableRow key={g.id} className="cursor-pointer" onClick={() => setOpenId(g.id)}>
-                    <TableCell className="max-w-[240px]">
+                  <TableRow key={g.id} className={cn("cursor-pointer", LONG_PRESS_CLASS)} data-state={selected.has(g.id) ? "selected" : undefined} {...press(g.id)} onClick={() => (selecting ? toggle(g.id) : openGuest(g.id))} title="Click for details · right-click for more">
+                    <TableCell onClick={(e) => e.stopPropagation()}><Checkbox checked={selected.has(g.id)} onCheckedChange={() => toggle(g.id)} aria-label={`Select ${g.firstName}`} /></TableCell>
+                    <TableCell className="max-w-[220px]">
                       <p className="font-medium truncate">{fullName(g)}</p>
                       <p className="text-xs text-muted-foreground truncate">{g.email || g.phone || "No contact details"}</p>
                     </TableCell>
@@ -267,9 +334,9 @@ export function RsvpResponses({
                     <TableCell className="text-center tabular-nums">{g.rsvpStatus === "ATTENDING" ? guestsCount(g) : "—"}</TableCell>
                     <TableCell className="text-sm text-muted-foreground whitespace-nowrap">{g.respondedAt ? dateLong(g.respondedAt) : "—"}</TableCell>
                     <TableCell className="text-sm">{g.checkedIn ? <span className="text-emerald-700 font-medium">Checked in</span> : <span className="text-muted-foreground">Not yet</span>}</TableCell>
-                    <TableCell className="text-sm text-muted-foreground max-w-[160px] truncate">{g.chair ? `${g.chair.table.name} · Seat ${g.chair.seatNumber}` : "—"}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground max-w-[140px] truncate">{g.chair ? `${g.chair.table.name} · Seat ${g.chair.seatNumber}` : "—"}</TableCell>
                     <TableCell className="text-right">
-                      <Button size="sm" variant="ghost" onClick={(e) => { e.stopPropagation(); setOpenId(g.id) }}>View details <ChevronRight className="size-4" /></Button>
+                      <Button size="icon" variant="ghost" className="size-8" aria-label={`View ${g.firstName}'s details`} onClick={(e) => { e.stopPropagation(); openGuest(g.id) }}><ChevronRight className="size-4" /></Button>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -278,25 +345,46 @@ export function RsvpResponses({
           </div>
 
           {/* Phones and tablets: cards, so nothing needs sideways scrolling. */}
-          <ul className="grid gap-3 sm:grid-cols-2 xl:hidden">
-            {shown.map((g) => (
-              <li key={g.id} className="min-w-0">
-                <button type="button" onClick={() => setOpenId(g.id)} className="w-full rounded-xl border bg-card p-4 text-left space-y-2 cursor-pointer hover:bg-secondary/40 transition-colors">
-                  <div className="flex items-start justify-between gap-2">
-                    <p className="font-semibold break-words min-w-0">{fullName(g)}</p>
-                    <StatusBadge status={g.rsvpStatus} className="shrink-0" />
-                  </div>
-                  <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
-                    {g.rsvpStatus === "ATTENDING" && <span className="inline-flex items-center gap-1"><Users className="size-3.5" aria-hidden /> {guestsCount(g)} guest{guestsCount(g) === 1 ? "" : "s"}</span>}
-                    <span>{g.respondedAt ? dateLong(g.respondedAt) : "No response yet"}</span>
-                    {g.chair && <span className="inline-flex items-center gap-1"><Armchair className="size-3.5" aria-hidden /> {g.chair.table.name}</span>}
-                    {g.checkedIn && <span className="text-emerald-700 font-medium">Checked in</span>}
-                  </div>
-                  <span className="inline-flex items-center gap-1 text-sm font-medium text-primary">View details <ChevronRight className="size-4" aria-hidden /></span>
-                </button>
-              </li>
-            ))}
-          </ul>
+          <div className="xl:hidden space-y-2">
+            <p className="text-xs text-muted-foreground">{selecting ? "Tap guests to select them." : "Tap a guest for details. Press and hold for more options."}</p>
+            <ul className="grid gap-3 sm:grid-cols-2">
+              {shown.map((g) => {
+                const isSelected = selected.has(g.id)
+                return (
+                  <li key={g.id} className="min-w-0">
+                    <button
+                      type="button"
+                      {...press(g.id)}
+                      onClick={() => (selecting ? toggle(g.id) : openGuest(g.id))}
+                      aria-pressed={selecting ? isSelected : undefined}
+                      className={cn(
+                        "w-full rounded-xl border bg-card p-4 text-left cursor-pointer hover:bg-secondary/40 active:bg-secondary/60 transition-colors",
+                        LONG_PRESS_CLASS,
+                        isSelected && "border-primary ring-2 ring-primary/30 bg-primary/5",
+                      )}
+                    >
+                      <div className="flex items-start gap-3">
+                        {selecting && <SelectTick checked={isSelected} />}
+                        <div className="min-w-0 flex-1 space-y-2">
+                          <div className="flex items-start justify-between gap-2">
+                            <p className="font-semibold break-words min-w-0">{fullName(g)}</p>
+                            <StatusBadge status={g.rsvpStatus} className="shrink-0" />
+                          </div>
+                          <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
+                            {g.rsvpStatus === "ATTENDING" && <span className="inline-flex items-center gap-1"><Users className="size-3.5" aria-hidden /> {guestsCount(g)} guest{guestsCount(g) === 1 ? "" : "s"}</span>}
+                            <span>{g.respondedAt ? dateLong(g.respondedAt) : "No response yet"}</span>
+                            {g.chair && <span className="inline-flex items-center gap-1"><Armchair className="size-3.5" aria-hidden /> {g.chair.table.name}</span>}
+                            {g.checkedIn && <span className="text-emerald-700 font-medium">Checked in</span>}
+                          </div>
+                          {!selecting && <span className="inline-flex items-center gap-1 text-sm font-medium text-primary">View details <ChevronRight className="size-4" aria-hidden /></span>}
+                        </div>
+                      </div>
+                    </button>
+                  </li>
+                )
+              })}
+            </ul>
+          </div>
 
           {filtered.length > shown.length && (
             <div className="flex justify-center">
@@ -322,8 +410,35 @@ export function RsvpResponses({
         </SheetContent>
       </Sheet>
 
+      {menuGuest && (
+        <GuestQuickActions
+          open={!!menuGuest}
+          onOpenChange={(o) => { if (!o) setMenuId(null) }}
+          title={fullName(menuGuest)}
+          subtitle={<span className="flex flex-wrap items-center gap-2"><StatusBadge status={menuGuest.rsvpStatus} />{menuGuest.rsvpStatus === "ATTENDING" && <span>{guestsCount(menuGuest)} guest{guestsCount(menuGuest) === 1 ? "" : "s"}</span>}</span>}
+          actions={guestActions(menuGuest)}
+        />
+      )}
+      {selecting && (
+        <SelectionBar
+          count={selected.size}
+          total={filtered.length}
+          pending={pending}
+          onSelectAll={() => setSelected(new Set(filtered.map((g) => g.id)))}
+          onDone={stopSelecting}
+          actions={[
+            { key: "attending", label: "Mark attending", onSelect: () => bulkStatus("ATTENDING", "attending") },
+            { key: "declined", label: "Mark not attending", onSelect: () => bulkStatus("DECLINED", "not attending") },
+            { key: "pending", label: "Mark pending", onSelect: () => bulkStatus("PENDING", "pending") },
+            { key: "checkin", label: "Check in", onSelect: () => bulkCheckIn(true) },
+            { key: "uncheck", label: "Undo check-in", onSelect: () => bulkCheckIn(false) },
+          ]}
+        />
+      )}
+
       <GuestDrawer
-        key={open?.id ?? "none"}
+        key={`${open?.id ?? "none"}-${drawerEdit ? "edit" : "view"}`}
+        startEditing={drawerEdit}
         eventId={eventId}
         guest={open}
         questions={questions}
@@ -355,8 +470,9 @@ function Detail({ label, children }: { label: string; children: React.ReactNode 
 }
 
 function GuestDrawer({
-  eventId, guest, questions, tables, mealOptions, allowMaybe, invitationUrl, invitationLive, rsvpBaseUrl, onOpenChange, onEditGuest,
+  eventId, guest, questions, tables, mealOptions, allowMaybe, invitationUrl, invitationLive, rsvpBaseUrl, onOpenChange, onEditGuest, startEditing = false,
 }: {
+  startEditing?: boolean
   eventId: string
   guest: ResponseGuest | null
   questions: { id: string; label: string }[]
@@ -371,7 +487,7 @@ function GuestDrawer({
 }) {
   const router = useRouter()
   const [pending, startTransition] = useTransition()
-  const [editingRsvp, setEditingRsvp] = useState(false)
+  const [editingRsvp, setEditingRsvp] = useState(startEditing)
   const [form, setForm] = useState(() => ({
     status: guest?.rsvpStatus ?? "PENDING",
     count: guest ? Math.max(1, guest.numberAttending ?? 1) : 1,

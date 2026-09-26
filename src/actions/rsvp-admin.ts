@@ -136,3 +136,20 @@ export async function resendInvitation(eventId: string, guestId: string): Promis
   if (!result.ok) return { ok: false, error: `The email couldn't be sent: ${result.error ?? "unknown error"}.` }
   return { ok: true, data: { mock: result.mock, to: guest.email } }
 }
+
+/** Check several guests in (or undo it) at once, e.g. from the RSVP Responses selection bar. */
+export async function bulkSetCheckIn(eventId: string, guestIds: string[], checkedIn: boolean): Promise<ActionResult<{ count: number }>> {
+  const user = await authorize(eventId)
+  const requested = Array.isArray(guestIds) ? guestIds.filter((id) => typeof id === "string").slice(0, 2000) : []
+  // Only guests of this event whose state actually changes.
+  const guests = await db.guest.findMany({ where: { eventId, id: { in: requested }, checkedIn: !checkedIn }, select: { id: true } })
+  const ids = guests.map((g) => g.id)
+  if (!ids.length) return { ok: true, data: { count: 0 } }
+  await db.$transaction([
+    db.guest.updateMany({ where: { eventId, id: { in: ids } }, data: { checkedIn, checkedInAt: checkedIn ? new Date() : null } }),
+    db.chair.updateMany({ where: { guestId: { in: ids }, table: { eventId } }, data: { status: checkedIn ? "CHECKED_IN" : "ASSIGNED" } }),
+    db.checkInLog.createMany({ data: ids.map((guestId) => ({ eventId, guestId, action: checkedIn ? "CHECK_IN" : "UNDO_CHECK_IN", byUserId: user.id })) }),
+  ])
+  refresh(eventId)
+  return { ok: true, data: { count: ids.length } }
+}
