@@ -3,7 +3,8 @@ import { db } from "@/lib/db"
 /**
  * Database updates an admin can apply from Admin → Settings, for a project that has no migration CLI step in its
  * deploy. Rules for every entry:
- *   - ADDITIVE ONLY: new tables, new nullable columns, new indexes, new enum types. Never drop, rename or rewrite data.
+ *   - ADDITIVE ONLY: new tables, new nullable columns, new indexes, new enum types. Never drop, rename or rewrite data
+ *     (filling a column that the same update just created is allowed).
  *   - IDEMPOTENT: every statement uses IF NOT EXISTS / duplicate_object guards, so re-running is harmless.
  *   - FIXED SQL: statements are constants in this file; nothing from a request ever reaches the SQL.
  * Applied IDs are recorded in "_AppMigration". Keep prisma/schema.prisma in sync with what is listed here.
@@ -58,6 +59,17 @@ export const APP_MIGRATIONS: AppMigration[] = [
         "confirmationCode" TEXT NOT NULL, "metaUserId" TEXT NOT NULL, "status" TEXT NOT NULL,
         "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
         CONSTRAINT "MetaDataDeletionRequest_pkey" PRIMARY KEY ("confirmationCode"))`,
+    ],
+  },
+  {
+    id: "2026-09-26_guest_rsvp_response_fields",
+    description: "RSVP responses: the answer a guest picked, their message to the host, and when they first responded (new empty columns).",
+    statements: [
+      `ALTER TABLE "Guest" ADD COLUMN IF NOT EXISTS "rsvpAnswer" TEXT`,
+      `ALTER TABLE "Guest" ADD COLUMN IF NOT EXISTS "rsvpMessage" TEXT`,
+      `ALTER TABLE "Guest" ADD COLUMN IF NOT EXISTS "rsvpFirstRespondedAt" TIMESTAMP(3)`,
+      // Guests who already answered: their first response time is the response time we have.
+      `UPDATE "Guest" SET "rsvpFirstRespondedAt" = "respondedAt" WHERE "rsvpFirstRespondedAt" IS NULL AND "respondedAt" IS NOT NULL`,
     ],
   },
 ]
