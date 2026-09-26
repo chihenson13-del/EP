@@ -8,7 +8,8 @@ export function sanitizePath(path: string | null | undefined): string | null {
   const clean = path.split(/[?#]/)[0].slice(0, 300)
   return clean
     .split("/")
-    .map((segment) => (/^[A-Za-z0-9_-]{16,}$/.test(segment) || /^EP1\./.test(segment) ? ":code" : segment))
+    // RSVP tokens and ids are long codes without dashes; readable slugs like "yves-rene-turns-1-lt2lf" stay.
+    .map((segment) => (/^[A-Za-z0-9_]{16,}$/.test(segment) || (segment.length >= 16 && (segment.match(/\d/g) ?? []).length >= 5) || /^EP1\./.test(segment) ? ":code" : segment))
     .join("/")
 }
 

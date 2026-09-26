@@ -385,6 +385,8 @@ t("font keys used for validation match the font registry exactly", () => {
 
 t("error log: paths never keep RSVP links or codes; the same error groups together", () => {
   assert.equal(sanitizePath("/events/my-party/rsvp/cmuil9fwn000fl604pz8jtgvq?x=1#y"), "/events/my-party/rsvp/:code")
+  assert.equal(sanitizePath("/events/rsvp-test-safe-to-delete/rsvp/cmuil8uc70003l6040nsvcffl"), "/events/rsvp-test-safe-to-delete/rsvp/:code")
+  assert.equal(sanitizePath("/dashboard/events/cmuil63yk0001kz04mvzt0uvc/editor"), "/dashboard/events/:code/editor")
   assert.equal(sanitizePath("/checkin/EP1.abc.def"), "/checkin/:code")
   assert.equal(sanitizePath("GET /events/[slug]/rsvp/[token]"), "GET /events/[slug]/rsvp/[token]")
   assert.equal(sanitizePath(null), null)
