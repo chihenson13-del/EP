@@ -68,7 +68,7 @@ const PREMIUM_FEATURES: Feature[] = [
 
 const PRO_FEATURES: Feature[] = [
   ...PREMIUM_FEATURES,
-  FEATURES.SMS_MESSAGING,
+  // SMS_MESSAGING is deliberately in no plan: SMS will be a separate paid add-on (see lib/addons.ts).
   FEATURES.EMAIL_SCHEDULING,
   FEATURES.ADVANCED_CHECKIN,
   FEATURES.COORDINATOR_TOOLS,

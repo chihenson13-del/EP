@@ -6,6 +6,7 @@ import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/
 import { Logo, LogoFull } from "@/components/brand/logo"
 import { EVENT_TYPE_OPTIONS } from "@/lib/event-types"
 import { PLAN_PRICING, formatPHP } from "@/lib/entitlements"
+import { OptionalAddOns } from "@/components/addons/optional-addons"
 import {
   CalendarDays, Users, LayoutGrid, Sparkles, QrCode, MessageSquareText,
   MapPin, CheckCircle2, ArrowRight,
@@ -51,7 +52,7 @@ const FEATURES = [
   { icon: Sparkles, title: "Canva-style invitation editor", body: "Drag, resize, layer, and design your own invitation exactly the way you want it." },
   { icon: Users, title: "Guest & RSVP management", body: "Personalized RSVP links, plus-ones, custom questions, households, and live response analytics." },
   { icon: LayoutGrid, title: "Visual seating & floor plans", body: "Real tables and chairs you drag into place — not a spreadsheet. Auto seat placement included." },
-  { icon: MessageSquareText, title: "Email & SMS reminders", body: "Personalized messages with merge fields, scheduled sends, and delivery tracking." },
+  { icon: MessageSquareText, title: "Email reminders", body: "Personalized messages with merge fields, scheduled sends, and delivery tracking. SMS invitations coming soon as an add-on." },
   { icon: QrCode, title: "QR check-in", body: "Scan guests in on event day and watch attendance update live." },
 ]
 
@@ -157,6 +158,7 @@ export default function LandingPage() {
           <PricingCard name="Pro" price={PLAN_PRICING.PRO.price} note="One-time, per event" features={["Everything in Premium", "Unlimited guests", "Coordinator tools", "Co-branding", "Advanced analytics"]} highlight />
           <PricingCard name="Unlimited" price={PLAN_PRICING.UNLIMITED.price} note="One-time, whole account" features={["Everything in Pro", "Unlimited events", "New events auto-unlock"]} />
         </div>
+        <OptionalAddOns className="mt-12" />
       </section>
 
       <section id="faq" className="bg-secondary/40 py-20">

@@ -1,6 +1,8 @@
 import { requireAdmin } from "@/lib/session"
 import { getDisplayPaymentSettings } from "@/lib/platform-settings"
 import { PlatformPaymentSettingsForm } from "@/components/admin/platform-payment-settings-form"
+import { ComingSoonBadge } from "@/components/addons/sms-coming-soon"
+import { SMS_ADDON, SMS_FEATURE_ENABLED } from "@/lib/addons"
 
 export default async function AdminSettingsPage() {
   await requireAdmin()
@@ -13,6 +15,18 @@ export default async function AdminSettingsPage() {
         <p className="text-muted-foreground text-sm mt-1">Configure the payment QR code and receiving account customers see at checkout.</p>
       </div>
       <PlatformPaymentSettingsForm settings={JSON.parse(JSON.stringify(settings))} />
+
+      <div className="rounded-xl border bg-card p-5 space-y-2">
+        <div className="flex items-center justify-between gap-3">
+          <p className="font-heading text-sm font-semibold uppercase tracking-[0.14em]">SMS feature</p>
+          <ComingSoonBadge />
+        </div>
+        <p className="text-sm">Status: <span className="font-medium">{SMS_FEATURE_ENABLED ? "Enabled" : "Coming Soon"}</span></p>
+        <p className="text-sm text-muted-foreground">
+          {SMS_ADDON.name} is paused. No SMS can be sent or scheduled, the SMS provider is never called, and SMS is not part of any plan.
+          Provider settings (SMS_PROVIDER_*) are kept so the add-on can be launched later.
+        </p>
+      </div>
     </div>
   )
 }

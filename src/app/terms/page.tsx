@@ -51,7 +51,7 @@ export default function TermsPage() {
 
       <h2>Messages</h2>
       <p>
-        Email and text delivery depends on outside providers and on the details you enter, so we cannot guarantee that every message arrives. Delivery status shown in the dashboard reflects what the provider reported.
+        Email delivery depends on outside providers and on the details you enter, so we cannot guarantee that every message arrives. Delivery status shown in the dashboard reflects what the provider reported. SMS invitations are not yet available; they are planned as a separate, optional paid add-on.
       </p>
 
       <h2>Availability</h2>

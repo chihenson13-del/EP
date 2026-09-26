@@ -15,7 +15,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { UpgradeModal } from "@/components/payments/upgrade-modal"
+import { SmsComingSoonCard, ComingSoonBadge } from "@/components/addons/sms-coming-soon"
 
 import { safe } from "@/lib/safe-action"
 import { useSingleFlight } from "@/lib/use-single-flight"
@@ -30,17 +30,21 @@ const TEMPLATES: Record<string, string> = {
   CUSTOM: "",
 }
 
-export function MessagingConsole({ eventId, guests, logs, canSms, providersConfigured }: { eventId: string; guests: Guest[]; logs: Log[]; canSms: boolean; providersConfigured: boolean }) {
-  const [channel, setChannel] = useState<"EMAIL" | "SMS">("EMAIL")
+/**
+ * Email is live. SMS is paused (lib/addons.ts): its tab shows the Coming Soon card and there is no SMS send path in
+ * this component at all. The server refuses SMS independently, so this is not the only safeguard.
+ */
+export function MessagingConsole({ eventId, guests, logs, providersConfigured }: { eventId: string; guests: Guest[]; logs: Log[]; providersConfigured: boolean }) {
+  const [tab, setTab] = useState<"EMAIL" | "SMS">("EMAIL")
+  const channel = "EMAIL" as const
   const [type, setType] = useState<"INVITATION" | "REMINDER" | "CUSTOM">("INVITATION")
   const [subject, setSubject] = useState("You're invited!")
   const [body, setBody] = useState(TEMPLATES.INVITATION)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [scheduledFor, setScheduledFor] = useState("")
   const [pending, startTransition] = useTransition()
-  const [upgradeOpen, setUpgradeOpen] = useState(false)
 
-  const eligibleGuests = useMemo(() => guests.filter((g) => (channel === "EMAIL" ? g.email : g.phone)), [guests, channel])
+  const eligibleGuests = useMemo(() => guests.filter((g) => g.email), [guests])
 
   const once = useSingleFlight()
   function toggleAll(checked: boolean) {
@@ -53,14 +57,6 @@ export function MessagingConsole({ eventId, guests, logs, canSms, providersConfi
       else next.delete(id)
       return next
     })
-  }
-
-  function handleChannelChange(next: "EMAIL" | "SMS") {
-    if (next === "SMS" && !canSms) {
-      setUpgradeOpen(true)
-      return
-    }
-    setChannel(next)
   }
 
   function handleSend() {
@@ -76,7 +72,7 @@ export function MessagingConsole({ eventId, guests, logs, canSms, providersConfi
       await once(async () => {
       const result = await safe(sendMessage({
         eventId, channel, type, guestIds: Array.from(selected),
-        subject: channel === "EMAIL" ? subject : undefined,
+        subject,
         // datetime-local is the user's local wall-clock time; send an absolute instant so the server doesn't read it as UTC.
         body, scheduledFor: scheduledFor ? singaporeLocalToInstant(scheduledFor).toISOString() : undefined,
       }))
@@ -101,13 +97,17 @@ export function MessagingConsole({ eventId, guests, logs, canSms, providersConfi
       <div className="space-y-4">
         <Card>
           <CardContent className="p-4 space-y-4">
-            <Tabs value={channel} onValueChange={(v) => handleChannelChange(v as "EMAIL" | "SMS")}>
+            <Tabs value={tab} onValueChange={(v) => setTab(v as "EMAIL" | "SMS")}>
               <TabsList>
                 <TabsTrigger value="EMAIL">Email</TabsTrigger>
-                <TabsTrigger value="SMS">SMS {!canSms && "🔒"}</TabsTrigger>
+                <TabsTrigger value="SMS" className="gap-1.5">SMS <ComingSoonBadge className="px-1.5 py-0 text-[9px] tracking-[0.1em]" /></TabsTrigger>
               </TabsList>
             </Tabs>
 
+            {tab === "SMS" ? (
+              <SmsComingSoonCard />
+            ) : (
+            <div className="space-y-4">
             <Select value={type} onValueChange={(v) => { setType(v as typeof type); setBody(TEMPLATES[v]) }}>
               <SelectTrigger className="w-56"><SelectValue /></SelectTrigger>
               <SelectContent>
@@ -117,7 +117,7 @@ export function MessagingConsole({ eventId, guests, logs, canSms, providersConfi
               </SelectContent>
             </Select>
 
-            {channel === "EMAIL" && <Input placeholder="Subject" value={subject} onChange={(e) => setSubject(e.target.value)} />}
+            <Input placeholder="Subject" value={subject} onChange={(e) => setSubject(e.target.value)} />
             <Textarea rows={6} value={body} onChange={(e) => setBody(e.target.value)} placeholder="Write your message..." />
             <div className="flex flex-wrap gap-1.5">
               {VARIABLES.map((v) => (
@@ -131,6 +131,8 @@ export function MessagingConsole({ eventId, guests, logs, canSms, providersConfi
             <Button onClick={handleSend} disabled={pending}>
               <Send className="size-4" /> {scheduledFor ? "Schedule" : "Send"} to {selected.size} guest{selected.size === 1 ? "" : "s"}
             </Button>
+            </div>
+            )}
           </CardContent>
         </Card>
 
@@ -165,7 +167,7 @@ export function MessagingConsole({ eventId, guests, logs, canSms, providersConfi
         {!providersConfigured && (
           <Alert>
             <Info className="size-4" />
-            <AlertDescription>Email/SMS providers aren&apos;t configured — messages send in clearly-labeled MOCK MODE and won&apos;t actually be delivered.</AlertDescription>
+            <AlertDescription>Email isn&apos;t configured — messages send in clearly-labeled MOCK MODE and won&apos;t actually be delivered.</AlertDescription>
           </Alert>
         )}
         <Card>
@@ -184,13 +186,11 @@ export function MessagingConsole({ eventId, guests, logs, canSms, providersConfi
                   <Badge variant="secondary" className="text-[10px] px-1 py-0">{g.rsvpStatus}</Badge>
                 </label>
               ))}
-              {eligibleGuests.length === 0 && <p className="text-xs text-muted-foreground p-2">No guests have {channel === "EMAIL" ? "an email" : "a phone number"} on file.</p>}
+              {eligibleGuests.length === 0 && <p className="text-xs text-muted-foreground p-2">No guests have an email on file.</p>}
             </div>
           </CardContent>
         </Card>
       </div>
-
-      <UpgradeModal open={upgradeOpen} onOpenChange={setUpgradeOpen} eventId={eventId} featureLabel="SMS messaging" />
     </div>
   )
 }

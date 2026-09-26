@@ -7,7 +7,8 @@ All-in-one event planning platform — invitations, RSVPs, guest management, sea
 - Next.js 16 (App Router) + TypeScript + Tailwind CSS v4 + shadcn/ui
 - PostgreSQL + Prisma ORM
 - Auth.js (NextAuth v5) — email/password, Google
-- Resend (email) / Twilio-compatible REST API (SMS) — both run in clearly-labeled **mock mode** until configured
+- Resend (email) — runs in clearly-labeled **mock mode** until configured
+- SMS (Twilio-compatible REST API) — **paused / Coming Soon**. Nothing can send while `SMS_FEATURE_ENABLED` in `src/lib/addons.ts` is `false`; it will launch later as a separate paid add-on
 
 ## 1. Install dependencies
 
@@ -57,7 +58,7 @@ All of these are optional — the app is fully functional without them, just in 
 |---|---|---|
 | Google login | `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET` | Button is hidden |
 | Real email delivery | `RESEND_API_KEY` | Emails log to the server console in **MOCK EMAIL MODE** |
-| Real SMS delivery | `SMS_PROVIDER_ACCOUNT_SID`, `SMS_PROVIDER_AUTH_TOKEN`, `SMS_PROVIDER_FROM_NUMBER` | SMS logs to the console in **MOCK SMS MODE** |
+| SMS delivery (paused) | `SMS_PROVIDER_ACCOUNT_SID`, `SMS_PROVIDER_AUTH_TOKEN`, `SMS_PROVIDER_FROM_NUMBER` | Ignored while SMS is paused — no SMS is ever sent. See `src/lib/addons.ts` for the launch checklist |
 
 ## Project structure
 

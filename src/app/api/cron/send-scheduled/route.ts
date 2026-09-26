@@ -4,6 +4,7 @@ import { db } from "@/lib/db"
 import { sendEmail } from "@/lib/mailer"
 import { sendSms } from "@/lib/sms"
 import { messageBodyToHtml } from "@/lib/email-templates"
+import { SMS_FEATURE_ENABLED } from "@/lib/addons"
 
 export const dynamic = "force-dynamic"
 
@@ -25,7 +26,9 @@ export async function GET(req: Request) {
 
   const due = await db.messageLog.findMany({
     relationLoadStrategy: "join",
-    where: { status: "SCHEDULED", scheduledFor: { lte: new Date() } },
+    // While SMS is paused, scheduled SMS rows are left exactly as they are (still SCHEDULED, never marked sent or
+    // failed), so nothing is delivered, recorded or charged, and they are still there if SMS launches later.
+    where: { status: "SCHEDULED", scheduledFor: { lte: new Date() }, ...(SMS_FEATURE_ENABLED ? {} : { channel: "EMAIL" as const }) },
     include: { guest: { select: { email: true, phone: true } }, event: { select: { name: true, status: true } } },
     orderBy: { scheduledFor: "asc" },
     take: 200,

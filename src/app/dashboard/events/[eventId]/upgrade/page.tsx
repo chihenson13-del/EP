@@ -2,6 +2,7 @@ import { getEventContext } from "@/lib/event-access"
 import { getEffectivePlan, hasUnlimitedAccount, PLAN_PRICING } from "@/lib/entitlements"
 import { EventPlanCards } from "@/components/payments/event-plan-cards"
 import { Badge } from "@/components/ui/badge"
+import { OptionalAddOns } from "@/components/addons/optional-addons"
 
 export default async function EventUpgradePage({ params }: { params: Promise<{ eventId: string }> }) {
   const { eventId } = await params
@@ -24,6 +25,8 @@ export default async function EventUpgradePage({ params }: { params: Promise<{ e
       ) : (
         <EventPlanCards eventId={eventId} currentPlan={plan} pricing={PLAN_PRICING} />
       )}
+
+      <OptionalAddOns className="pt-4" />
     </div>
   )
 }

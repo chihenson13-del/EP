@@ -11,6 +11,7 @@ import { sendSms, fillMessageVariables } from "@/lib/sms"
 import { messageBodyToHtml } from "@/lib/email-templates"
 import { sendMessageSchema, type SendMessageInput } from "@/lib/validations/messaging"
 import type { ActionResult } from "@/actions/events"
+import { SMS_FEATURE_ENABLED, SMS_UNAVAILABLE_MESSAGE } from "@/lib/addons"
 
 export async function sendMessage(input: SendMessageInput): Promise<ActionResult<{ sent: number; failed: number; skipped: number; scheduled: number; mock: boolean }>> {
   const user = await requireUser()
@@ -20,6 +21,9 @@ export async function sendMessage(input: SendMessageInput): Promise<ActionResult
 
   const hasAccess = await requireEventAccess(user.id, d.eventId).then(() => true).catch(() => false)
   if (!hasAccess) return { ok: false, error: "You do not have access to this event." }
+
+  // SMS is paused: refuse before anything is scheduled, sent, logged or charged.
+  if (d.channel === "SMS" && !SMS_FEATURE_ENABLED) return { ok: false, error: SMS_UNAVAILABLE_MESSAGE }
 
   if (d.channel === "SMS") {
     const allowed = await hasFeature(user.id, d.eventId, FEATURES.SMS_MESSAGING)
@@ -102,6 +106,7 @@ export async function saveMessageTemplate(eventId: string, input: { id?: string;
   const hasAccess = await requireEventAccess(user.id, eventId).then(() => true).catch(() => false)
   if (!hasAccess) return { ok: false, error: "You do not have access to this event." }
   if (input.body.length > 5000 || (input.subject?.length ?? 0) > 300) return { ok: false, error: "That message is too long." }
+  if (input.channel === "SMS" && !SMS_FEATURE_ENABLED) return { ok: false, error: SMS_UNAVAILABLE_MESSAGE }
 
   let template: { id: string }
   if (input.id) {

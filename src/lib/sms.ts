@@ -1,3 +1,5 @@
+import { SMS_FEATURE_ENABLED, SMS_UNAVAILABLE_MESSAGE } from "@/lib/addons"
+
 export type SendSmsInput = {
   to: string
   message: string
@@ -8,6 +10,8 @@ export type SendSmsResult = {
   mock: boolean
   provider: string
   error?: string
+  /** True when SMS is paused (see lib/addons.ts): nothing was sent and nothing should be recorded as a delivery. */
+  disabled?: boolean
 }
 
 const SMS_SID = process.env.SMS_PROVIDER_ACCOUNT_SID
@@ -15,12 +19,15 @@ const SMS_TOKEN = process.env.SMS_PROVIDER_AUTH_TOKEN
 const SMS_FROM = process.env.SMS_PROVIDER_FROM_NUMBER
 
 /**
- * Provider-ready SMS sender (Twilio-compatible REST API shape).
+ * Provider-ready SMS sender (Twilio-compatible REST API shape). Currently PAUSED by SMS_FEATURE_ENABLED.
  * If SMS credentials are not configured, this runs in clearly-labeled
  * MOCK SMS MODE: nothing is actually sent, and the result always reports
  * `mock: true` so the UI never claims a mock message was delivered.
  */
 export async function sendSms(input: SendSmsInput): Promise<SendSmsResult> {
+  // Paused: never touch the provider, never log a mock send. Callers check the flag first; this is the backstop.
+  if (!SMS_FEATURE_ENABLED) return { ok: false, mock: false, provider: "none", error: SMS_UNAVAILABLE_MESSAGE, disabled: true }
+
   if (!SMS_SID || !SMS_TOKEN || !SMS_FROM) {
     console.log(`[MOCK SMS MODE] to=${input.to} message="${input.message}"`)
     return { ok: true, mock: true, provider: "mock" }
