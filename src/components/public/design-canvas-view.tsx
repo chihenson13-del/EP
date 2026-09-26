@@ -1,3 +1,4 @@
+import { designTextStyle } from "@/components/editor/text-style"
 import type { DesignObject } from "@/components/editor/types"
 
 /**
@@ -17,13 +18,7 @@ export function DesignCanvasView({ width, height, objects }: { width: number; he
           {o.type === "text" && (
             <foreignObject width={o.width} height={o.height}>
               <div
-                style={{
-                  width: "100%", height: "100%", display: "flex", alignItems: "center",
-                  justifyContent: o.align === "left" ? "flex-start" : o.align === "right" ? "flex-end" : "center",
-                  fontSize: o.fontSize ?? 24, color: o.color ?? "var(--brand-plum)", fontWeight: o.fontWeight ?? 600,
-                  fontFamily: o.fontFamily ?? "inherit", textAlign: o.align ?? "center", whiteSpace: "pre-wrap", wordBreak: "break-word",
-                  lineHeight: 1.2, padding: 4,
-                }}
+                style={designTextStyle(o)}
               >
                 {o.text || ""}
               </div>

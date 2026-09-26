@@ -1,7 +1,8 @@
 import { formatDate } from "@/lib/timezone"
 import { notFound } from "next/navigation"
 import { db } from "@/lib/db"
-import { resolveTheme, fontPairStyle } from "@/lib/theme-resolve"
+import { resolveTheme, themeStyle } from "@/lib/theme-resolve"
+import { readRsvpPrompt, visibleRsvpOptions } from "@/lib/rsvp-prompt"
 import { RsvpForm } from "@/components/public/rsvp-form"
 import { MusicPlayer } from "@/components/public/music-player"
 
@@ -21,19 +22,17 @@ export default async function GuestRsvpPage({ params }: { params: Promise<{ even
   if (!found) notFound()
   const { event, ...guest } = found
 
-  const theme = resolveTheme(event.page?.theme?.config, event.page?.colors, event.page?.fonts)
+  const layout = (event.page?.layout ?? null) as { themeKey?: string } | null
+  const theme = resolveTheme({ themeKey: layout?.themeKey, legacyThemeKey: event.page?.theme?.key, colors: event.page?.colors, fonts: event.page?.fonts })
+  const prompt = readRsvpPrompt(event.page?.layout)
   const deadlinePassed = !!(event.rsvpDeadline && new Date() > event.rsvpDeadline && !event.allowLateRsvp)
-  const fontStyle = fontPairStyle(theme.fontPair)
 
   return (
-    <div
-      style={{ backgroundColor: theme.background, color: theme.primary, ...fontStyle.style }}
-      className={`min-h-screen py-12 px-4 font-sans ${fontStyle.className}`}
-    >
+    <div style={themeStyle(theme)} className="min-h-screen py-12 px-4">
       <div className="max-w-lg mx-auto">
         <div className="text-center mb-8">
           <p className="uppercase tracking-[0.2em] text-xs opacity-70 mb-2">You&apos;re invited</p>
-          <h1 className="font-heading text-3xl font-bold">{event.name}</h1>
+          <h1 className="text-3xl sm:text-4xl font-bold" style={{ fontFamily: "var(--font-title)", color: theme.colors.primary }}>{event.name}</h1>
           {event.date && (
             <p className="mt-2 text-sm opacity-70">
               {formatDate(event.date, { weekday: "long", month: "long", day: "numeric", year: "numeric" })}
@@ -46,7 +45,8 @@ export default async function GuestRsvpPage({ params }: { params: Promise<{ even
         <RsvpForm
           theme={theme}
           deadlinePassed={deadlinePassed}
-          allowMaybe={event.allowMaybe}
+          question={prompt.question}
+          options={visibleRsvpOptions(prompt, event.allowMaybe)}
           questions={JSON.parse(JSON.stringify(event.customQuestions))}
           guest={JSON.parse(JSON.stringify(guest))}
         />

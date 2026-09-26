@@ -223,7 +223,7 @@ export async function duplicateEvent(eventId: string): Promise<ActionResult<{ ev
       venueName: source.venueName,
       address: source.address,
       description: source.description,
-      page: { create: { themeId: source.page?.themeId, colors: toJson(source.page?.colors) ?? undefined, fonts: toJson(source.page?.fonts) ?? undefined } },
+      page: { create: { themeId: source.page?.themeId, colors: toJson(source.page?.colors) ?? undefined, fonts: toJson(source.page?.fonts) ?? undefined, layout: toJson(source.page?.layout) ?? undefined } },
       design: { create: {} },
       floorPlan: { create: { width: source.floorPlan?.width, height: source.floorPlan?.height, gridSize: source.floorPlan?.gridSize, backgroundColor: source.floorPlan?.backgroundColor } },
       sections: {
