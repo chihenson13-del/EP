@@ -72,6 +72,20 @@ export const APP_MIGRATIONS: AppMigration[] = [
       `UPDATE "Guest" SET "rsvpFirstRespondedAt" = "respondedAt" WHERE "rsvpFirstRespondedAt" IS NULL AND "respondedAt" IS NOT NULL`,
     ],
   },
+  {
+    id: "2026-09-27_app_error_log",
+    description: "Error alerts: a log of site errors (one row per distinct error, with a count) so admins are emailed and can see what broke (new table only).",
+    statements: [
+      `CREATE TABLE IF NOT EXISTS "AppError" (
+        "id" TEXT NOT NULL, "fingerprint" TEXT NOT NULL, "source" TEXT NOT NULL, "message" TEXT NOT NULL, "path" TEXT,
+        "detail" TEXT, "count" INTEGER NOT NULL DEFAULT 1,
+        "firstSeenAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, "lastSeenAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "lastAlertedAt" TIMESTAMP(3), "resolvedAt" TIMESTAMP(3),
+        CONSTRAINT "AppError_pkey" PRIMARY KEY ("id"))`,
+      `CREATE UNIQUE INDEX IF NOT EXISTS "AppError_fingerprint_key" ON "AppError"("fingerprint")`,
+      `CREATE INDEX IF NOT EXISTS "AppError_lastSeenAt_idx" ON "AppError"("lastSeenAt")`,
+    ],
+  },
 ]
 
 async function ensureLedger(): Promise<void> {

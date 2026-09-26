@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { DM_Sans, Playfair_Display } from "next/font/google";
 import "./globals.css";
 import { Providers } from "@/components/providers";
+import { ClientErrorReporter } from "@/components/shared/client-error-reporter";
 import { cn } from "@/lib/utils";
 
 const fontSans = DM_Sans({ subsets: ["latin"], variable: "--font-sans" });
@@ -42,6 +43,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     >
       <body className="min-h-full flex flex-col font-sans">
         <Providers>{children}</Providers>
+        <ClientErrorReporter />
       </body>
     </html>
   );

@@ -5,6 +5,7 @@ import { sendEmail } from "@/lib/mailer"
 import { sendSms } from "@/lib/sms"
 import { messageBodyToHtml } from "@/lib/email-templates"
 import { SMS_FEATURE_ENABLED } from "@/lib/addons"
+import { sendDailyErrorSummary } from "@/lib/error-alerts"
 
 export const dynamic = "force-dynamic"
 
@@ -67,5 +68,8 @@ export async function GET(req: Request) {
     else failed++
   }
 
-  return NextResponse.json({ processed: due.length, sent, failed, skipped })
+  // Once a day: email the admins any errors from the last 24 hours they haven't heard about yet.
+  const errorSummary = await sendDailyErrorSummary()
+
+  return NextResponse.json({ processed: due.length, sent, failed, skipped, errorSummary })
 }

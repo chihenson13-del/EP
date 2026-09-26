@@ -22,6 +22,7 @@ import { parseTimeLabel, getEventWindow, windowsOverlap, getBookingStatus } from
 import { matchGuests, displayName, signRef, verifyRef, signSession, verifySession, verificationMatches } from "../src/lib/rsvp-lookup"
 import { checkInCode, readScannedCode } from "../src/lib/checkin-pass"
 import { FONT_KEYS, isFontKey } from "../src/lib/font-keys"
+import { sanitizePath, fingerprintOf } from "../src/lib/error-fingerprint"
 import { readFileSync } from "node:fs"
 import { readRsvpForm, readRsvpButton, readRsvpSection, lookupMode, rsvpDeadlineEnd, isRsvpClosed, rsvpPath } from "../src/lib/rsvp-settings"
 
@@ -380,6 +381,18 @@ t("font keys used for validation match the font registry exactly", () => {
   assert.equal(isFontKey("inter"), true)
   assert.equal(isFontKey("comic-sans"), false)
   assert.equal(isFontKey("__proto__"), false)
+})
+
+t("error log: paths never keep RSVP links or codes; the same error groups together", () => {
+  assert.equal(sanitizePath("/events/my-party/rsvp/cmuil9fwn000fl604pz8jtgvq?x=1#y"), "/events/my-party/rsvp/:code")
+  assert.equal(sanitizePath("/checkin/EP1.abc.def"), "/checkin/:code")
+  assert.equal(sanitizePath("GET /events/[slug]/rsvp/[token]"), "GET /events/[slug]/rsvp/[token]")
+  assert.equal(sanitizePath(null), null)
+  const a = fingerprintOf("server", 'Invalid value "Alice" at row 12', "/x")
+  const b = fingerprintOf("server", 'Invalid value "Bob" at row 99', "/x")
+  assert.equal(a, b)
+  assert.notEqual(a, fingerprintOf("client", 'Invalid value "Alice" at row 12', "/x"))
+  assert.notEqual(a, fingerprintOf("server", 'Invalid value "Alice" at row 12', "/y"))
 })
 
 asyncTests().then(() => console.log(`\n${n} groups passed`)).catch((error) => { console.error(error); process.exit(1) })

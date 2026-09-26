@@ -834,6 +834,26 @@ model RateLimit {
   @@index([resetAt])
 }
 
+/// One row per distinct site error (same error on the same route = same fingerprint), counted.
+/// Written by src/lib/error-alerts.ts; admins get an email (throttled) and see the list in Admin → Settings.
+model AppError {
+  id            String    @id
+  fingerprint   String    @unique
+  /// "server" (a page, API route or server action failed) or "client" (the page crashed in a browser)
+  source        String
+  message       String
+  /// Route pattern or a path with secrets removed — never a raw RSVP link.
+  path          String?
+  detail        String?
+  count         Int       @default(1)
+  firstSeenAt   DateTime  @default(now())
+  lastSeenAt    DateTime  @default(now())
+  lastAlertedAt DateTime?
+  resolvedAt    DateTime?
+
+  @@index([lastSeenAt])
+}
+
 model PlatformSettings {
   id                  String   @id @default("default")
   paymentQrImageUrl   String?  @db.Text

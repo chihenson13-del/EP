@@ -6,10 +6,13 @@ import { SMS_ADDON, SMS_FEATURE_ENABLED } from "@/lib/addons"
 import { getMigrationStatus } from "@/lib/db-migrations"
 import { DatabaseUpdatesCard } from "@/components/admin/database-updates-card"
 import { MetaIntegrationStatus } from "@/components/admin/meta-integration-status"
+import { ErrorLogCard } from "@/components/admin/error-log-card"
+import { listRecentErrors, errorAlertRecipients } from "@/lib/error-alerts"
+import { isEmailConfigured } from "@/lib/mailer"
 
 export default async function AdminSettingsPage() {
   await requireAdmin()
-  const [settings, migrations] = await Promise.all([getDisplayPaymentSettings(), getMigrationStatus()])
+  const [settings, migrations, errors] = await Promise.all([getDisplayPaymentSettings(), getMigrationStatus(), listRecentErrors()])
 
   return (
     <div className="space-y-6 max-w-xl">
@@ -20,6 +23,8 @@ export default async function AdminSettingsPage() {
       <PlatformPaymentSettingsForm settings={JSON.parse(JSON.stringify(settings))} />
 
       <DatabaseUpdatesCard migrations={migrations} />
+
+      <ErrorLogCard initial={errors} recipients={errorAlertRecipients()} emailLive={isEmailConfigured} />
 
       <MetaIntegrationStatus />
 
