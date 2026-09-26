@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { isValidFacebookUrl, FACEBOOK_URL_ERROR } from "@/lib/facebook"
 
 export const guestSchema = z.object({
   id: z.string().optional(),
@@ -7,6 +8,7 @@ export const guestSchema = z.object({
   email: z.string().trim().email("Enter a valid email").optional().or(z.literal("")),
   phone: z.string().trim().max(30).optional().or(z.literal("")),
   category: z.string().trim().max(60).optional().or(z.literal("")),
+  facebookProfileUrl: z.string().trim().max(300).refine((v) => v === "" || isValidFacebookUrl(v), FACEBOOK_URL_ERROR).optional(),
   groupId: z.string().optional().or(z.literal("")),
   plusOneAllowed: z.boolean().optional(),
   maxPlusOnes: z.number().int().min(0).max(20).optional(),
@@ -32,5 +34,7 @@ export const importRowSchema = z.object({
   email: z.string().trim().optional(),
   phone: z.string().trim().optional(),
   category: z.string().trim().optional(),
+  // Checked separately on import: an invalid link never fails the row, it is just left blank and reported.
+  facebookProfileUrl: z.string().trim().optional(),
 })
 export type ImportRow = z.infer<typeof importRowSchema>

@@ -12,6 +12,11 @@ export default async function AdminEventsPage() {
     include: { owner: { select: { name: true, email: true } }, _count: { select: { guests: true } }, entitlements: { where: { status: "ACTIVE" }, include: { plan: true }, take: 1, orderBy: { activatedAt: "desc" } } },
     orderBy: { createdAt: "desc" },
   })
+  // Admins see that guests have a Facebook link (a count per event), never the links themselves.
+  const withFacebook = new Map(
+    (await db.guest.groupBy({ by: ["eventId"], where: { facebookProfileUrl: { not: null } }, _count: { _all: true } }))
+      .map((row) => [row.eventId, row._count._all])
+  )
 
   return (
     <div className="space-y-6">
@@ -36,7 +41,10 @@ export default async function AdminEventsPage() {
                 <TableCell className="text-sm text-muted-foreground">{getEventTypeConfig(e.type).label}</TableCell>
                 <TableCell className="text-sm">{e.owner.name}</TableCell>
                 <TableCell><Badge variant="outline">{e.status}</Badge></TableCell>
-                <TableCell>{e._count.guests}</TableCell>
+                <TableCell>
+                  {e._count.guests}
+                  {withFacebook.get(e.id) ? <span className="block text-xs text-muted-foreground">{withFacebook.get(e.id)} with Facebook</span> : null}
+                </TableCell>
                 <TableCell><Badge variant="outline">{e.entitlements[0]?.plan.name ?? "Free"}</Badge></TableCell>
                 <TableCell className="text-sm text-muted-foreground">{formatDate(e.createdAt)}</TableCell>
               </TableRow>

@@ -10,6 +10,7 @@ import { randomBytes } from "node:crypto"
 import sharp from "sharp"
 import { shrinkDataUrl, shrinkCanvasObjects, SHRINK_ABOVE_BYTES } from "../src/lib/shrink-image"
 import { isAdminEmail, effectiveRole } from "../src/lib/admin-emails"
+import { normalizeFacebookUrl } from "../src/lib/facebook"
 import { withDesignImageUrls } from "../src/lib/design-images"
 import { parseTimeLabel, getEventWindow, windowsOverlap, getBookingStatus } from "../src/lib/booking-calendar"
 
@@ -166,6 +167,17 @@ t("admin emails: an ADMIN whose email is off the allowlist is a regular user", (
   assert.equal(isAdminEmail(" "), false) // blank entries in a comma list never match
   if (before[0] !== undefined) process.env.ADMIN_BOOTSTRAP_EMAIL = before[0]; else delete process.env.ADMIN_BOOTSTRAP_EMAIL
   if (before[1] !== undefined) process.env.ADMIN_EMAILS = before[1]; else delete process.env.ADMIN_EMAILS
+})
+t("facebook links: only https facebook.com / m.facebook.com / m.me profile links are kept", () => {
+  assert.equal(normalizeFacebookUrl("https://facebook.com/janedoe"), "https://facebook.com/janedoe")
+  assert.equal(normalizeFacebookUrl("facebook.com/jane.doe/"), "https://facebook.com/jane.doe")
+  assert.equal(normalizeFacebookUrl("https://m.facebook.com/jane.doe?ref=x"), "https://m.facebook.com/jane.doe")
+  assert.equal(normalizeFacebookUrl("https://m.me/janedoe"), "https://m.me/janedoe")
+  assert.equal(normalizeFacebookUrl("https://www.facebook.com/profile.php?id=100012345678"), "https://www.facebook.com/profile.php?id=100012345678")
+  for (const bad of ["javascript:alert(1)", "http://facebook.com/jane", "https://evil.com/facebook.com/jane", "https://facebook.com.evil.com/jane",
+    "https://user:pw@facebook.com/jane", "https://facebook.com/", "https://facebook.com/l.php?u=https://evil.com", "https://m.me/a/b", "", null]) {
+    assert.equal(normalizeFacebookUrl(bad), null, String(bad))
+  }
 })
 const ta = async (name: string, fn: () => Promise<void>) => { await fn(); n++; console.log("ok -", name) }
 

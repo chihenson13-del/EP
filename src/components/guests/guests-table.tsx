@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react"
 import { toast } from "sonner"
-import { Search, Plus, Upload, Download, Trash2, Pencil, Link as LinkIcon, MoreVertical } from "lucide-react"
+import { Search, Plus, Upload, Download, Trash2, Pencil, Link as LinkIcon, MoreVertical, Eye } from "lucide-react"
 import Link from "next/link"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -12,6 +12,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { GuestFormDialog } from "@/components/guests/guest-form-dialog"
+import { GuestDetailsSheet } from "@/components/guests/guest-details-sheet"
+import { AddFacebookButton, MessageOnFacebookButton } from "@/components/guests/facebook-contact"
 import { bulkDeleteGuests, bulkSetRsvpStatus, deleteGuest } from "@/actions/guests"
 import { toCsv } from "@/lib/csv"
 
@@ -22,6 +24,7 @@ type Guest = {
   lastName: string | null
   email: string | null
   phone: string | null
+  facebookProfileUrl: string | null
   category: string | null
   rsvpStatus: "PENDING" | "ATTENDING" | "DECLINED" | "MAYBE"
   rsvpToken: string
@@ -54,13 +57,22 @@ export function GuestsTable({ eventId, eventSlug, guests }: { eventId: string; e
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [editing, setEditing] = useState<Guest | null>(null)
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [focusField, setFocusField] = useState<"facebookProfileUrl" | undefined>(undefined)
+  const [detailsId, setDetailsId] = useState<string | null>(null)
+  const details = detailsId ? guests.find((g) => g.id === detailsId) ?? null : null
+
+  function openEditor(guest: Guest | null, focus?: "facebookProfileUrl") {
+    setEditing(guest)
+    setFocusField(focus)
+    setDialogOpen(true)
+  }
   const [pending, startTransition] = useTransition()
 
   const filtered = useMemo(() => {
     return guests.filter((g) => {
       if (statusFilter !== "ALL" && g.rsvpStatus !== statusFilter) return false
       if (!search.trim()) return true
-      const haystack = `${g.firstName} ${g.lastName ?? ""} ${g.email ?? ""} ${g.phone ?? ""} ${g.category ?? ""}`.toLowerCase()
+      const haystack = `${g.firstName} ${g.lastName ?? ""} ${g.email ?? ""} ${g.phone ?? ""} ${g.category ?? ""} ${g.facebookProfileUrl ?? ""}`.toLowerCase()
       return haystack.includes(search.toLowerCase())
     })
   }, [guests, search, statusFilter])
@@ -81,9 +93,9 @@ export function GuestsTable({ eventId, eventSlug, guests }: { eventId: string; e
   }
 
   function handleExportCsv() {
-    const header = ["First Name", "Last Name", "Email", "Phone", "Category", "RSVP Status", "Table", "Seat", "Checked In"]
+    const header = ["First Name", "Last Name", "Email", "Phone", "Facebook Profile", "Category", "RSVP Status", "Table", "Seat", "Checked In"]
     const rows = filtered.map((g) => [
-      g.firstName, g.lastName ?? "", g.email ?? "", g.phone ?? "", g.category ?? "",
+      g.firstName, g.lastName ?? "", g.email ?? "", g.phone ?? "", g.facebookProfileUrl ?? "", g.category ?? "",
       g.rsvpStatus, g.chair?.table.name ?? "", g.chair?.seatNumber ?? "", g.checkedIn ? "Yes" : "No",
     ])
     const csv = toCsv([header, ...rows])
@@ -152,7 +164,7 @@ export function GuestsTable({ eventId, eventSlug, guests }: { eventId: string; e
         </Select>
         <Button variant="outline" onClick={handleExportCsv}><Download className="size-4" /> Export</Button>
         <Button variant="outline" asChild><Link href={`/dashboard/events/${eventId}/guests/import`}><Upload className="size-4" /> Import</Link></Button>
-        <Button onClick={() => { setEditing(null); setDialogOpen(true) }}><Plus className="size-4" /> Add guest</Button>
+        <Button onClick={() => openEditor(null)}><Plus className="size-4" /> Add guest</Button>
       </div>
 
       {selected.size > 0 && (
@@ -188,8 +200,19 @@ export function GuestsTable({ eventId, eventSlug, guests }: { eventId: string; e
             {shown.map((g) => (
               <TableRow key={g.id}>
                 <TableCell><Checkbox checked={selected.has(g.id)} onCheckedChange={(c) => toggleOne(g.id, !!c)} /></TableCell>
-                <TableCell className="font-medium">{g.firstName} {g.lastName}</TableCell>
-                <TableCell className="text-sm text-muted-foreground">{g.email || g.phone || "—"}</TableCell>
+                <TableCell className="font-medium">
+                  <button type="button" className="text-left hover:underline underline-offset-2" onClick={() => setDetailsId(g.id)}>
+                    {g.firstName} {g.lastName}
+                  </button>
+                </TableCell>
+                <TableCell className="text-sm text-muted-foreground">
+                  <div className="flex flex-col items-start gap-1">
+                    <span className="max-w-[220px] truncate">{g.email || g.phone || "—"}</span>
+                    {g.facebookProfileUrl
+                      ? <MessageOnFacebookButton url={g.facebookProfileUrl} className="h-7 px-2 text-xs" />
+                      : <AddFacebookButton onClick={() => openEditor(g, "facebookProfileUrl")} className="h-7 px-2 text-xs text-muted-foreground" />}
+                  </div>
+                </TableCell>
                 <TableCell className="text-sm text-muted-foreground">{g.category || "—"}</TableCell>
                 <TableCell><Badge variant={STATUS_VARIANT[g.rsvpStatus]}>{g.rsvpStatus}</Badge></TableCell>
                 <TableCell className="text-sm">{g.plusOnes.length}/{g.maxPlusOnes}</TableCell>
@@ -201,7 +224,8 @@ export function GuestsTable({ eventId, eventSlug, guests }: { eventId: string; e
                       <Button variant="ghost" size="icon" className="size-8"><MoreVertical className="size-4" /></Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => { setEditing(g); setDialogOpen(true) }}><Pencil className="size-3.5" /> Edit</DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => setDetailsId(g.id)}><Eye className="size-3.5" /> View details</DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => openEditor(g)}><Pencil className="size-3.5" /> Edit</DropdownMenuItem>
                       <DropdownMenuItem onClick={() => copyRsvpLink(g.rsvpToken)}><LinkIcon className="size-3.5" /> Copy RSVP link</DropdownMenuItem>
                       <DropdownMenuItem variant="destructive" onClick={() => handleDelete(g.id)}><Trash2 className="size-3.5" /> Delete</DropdownMenuItem>
                     </DropdownMenuContent>
@@ -219,7 +243,14 @@ export function GuestsTable({ eventId, eventSlug, guests }: { eventId: string; e
         </div>
       )}
 
-      <GuestFormDialog eventId={eventId} open={dialogOpen} onOpenChange={setDialogOpen} guest={editing} />
+      <GuestFormDialog eventId={eventId} open={dialogOpen} onOpenChange={setDialogOpen} guest={editing} focusField={focusField} />
+      <GuestDetailsSheet
+        guest={details}
+        open={!!details}
+        onOpenChange={(open) => { if (!open) setDetailsId(null) }}
+        onEdit={() => { const g = details; setDetailsId(null); openEditor(g) }}
+        onAddFacebook={() => { const g = details; setDetailsId(null); openEditor(g, "facebookProfileUrl") }}
+      />
     </div>
   )
 }

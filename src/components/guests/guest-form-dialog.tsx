@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Switch } from "@/components/ui/switch"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
+import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 
 import { safe } from "@/lib/safe-action"
 import { useSingleFlight } from "@/lib/use-single-flight"
@@ -22,6 +22,7 @@ type GuestLike = {
   email?: string | null
   phone?: string | null
   category?: string | null
+  facebookProfileUrl?: string | null
   groupId?: string | null
   plusOneAllowed?: boolean
   maxPlusOnes?: number
@@ -32,8 +33,15 @@ type GuestLike = {
 }
 
 export function GuestFormDialog({
-  eventId, open, onOpenChange, guest,
-}: { eventId: string; open: boolean; onOpenChange: (open: boolean) => void; guest: GuestLike | null }) {
+  eventId, open, onOpenChange, guest, focusField,
+}: {
+  eventId: string
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  guest: GuestLike | null
+  /** Field to focus when the dialog opens, e.g. from an "Add Facebook" button. */
+  focusField?: "facebookProfileUrl"
+}) {
   const [loading, setLoading] = useState(false)
 
   const form = useForm<GuestInput>({
@@ -44,8 +52,14 @@ export function GuestFormDialog({
   const plusOneAllowed = useWatch({ control: form.control, name: "plusOneAllowed" })
 
   useEffect(() => {
-    if (open) form.reset(guest ? toFormValues(guest) : emptyValues())
-  }, [open, guest, form])
+    if (!open) return
+    form.reset(guest ? toFormValues(guest) : emptyValues())
+    if (focusField) {
+      // Wait for the dialog's own open-focus to finish, then move focus to the requested field.
+      const timer = window.setTimeout(() => form.setFocus(focusField, { shouldSelect: false }), 60)
+      return () => window.clearTimeout(timer)
+    }
+  }, [open, guest, form, focusField])
 
   const once = useSingleFlight()
   function onSubmit(values: GuestInput) {
@@ -87,6 +101,16 @@ export function GuestFormDialog({
                 <FormItem><FormLabel>Phone</FormLabel><FormControl><Input {...field} /></FormControl></FormItem>
               )} />
             </div>
+            <FormField control={form.control} name="facebookProfileUrl" render={({ field }) => (
+              <FormItem>
+                <FormLabel>Facebook Profile</FormLabel>
+                <FormControl>
+                  <Input type="text" inputMode="url" autoComplete="off" autoCapitalize="none" spellCheck={false} placeholder="https://facebook.com/username" {...field} value={field.value ?? ""} />
+                </FormControl>
+                <FormDescription>Optional. Add the guest&apos;s Facebook profile link to quickly contact them.</FormDescription>
+                <FormMessage />
+              </FormItem>
+            )} />
             <FormField control={form.control} name="category" render={({ field }) => (
               <FormItem><FormLabel>Category / group</FormLabel><FormControl><Input placeholder="e.g. Family, Friends, VIP" {...field} /></FormControl></FormItem>
             )} />
@@ -145,7 +169,7 @@ export function GuestFormDialog({
 
 function emptyValues(): GuestInput {
   return {
-    firstName: "", lastName: "", email: "", phone: "", category: "", groupId: "",
+    firstName: "", lastName: "", email: "", phone: "", category: "", facebookProfileUrl: "", groupId: "",
     plusOneAllowed: false, maxPlusOnes: 0, childrenCount: 0, mealPreference: "", dietaryRestrictions: "", notes: "",
   }
 }
@@ -158,6 +182,7 @@ function toFormValues(guest: GuestLike): GuestInput {
     email: guest.email ?? "",
     phone: guest.phone ?? "",
     category: guest.category ?? "",
+    facebookProfileUrl: guest.facebookProfileUrl ?? "",
     groupId: guest.groupId ?? "",
     plusOneAllowed: guest.plusOneAllowed ?? false,
     maxPlusOnes: guest.maxPlusOnes ?? 0,

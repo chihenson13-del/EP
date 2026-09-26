@@ -8,6 +8,7 @@ import { getEventLimits, hasFeature, FEATURES } from "@/lib/entitlements"
 import { guestSchema, customQuestionSchema, importRowSchema, type GuestInput, type CustomQuestionInput, type ImportRow } from "@/lib/validations/guest"
 import type { ActionResult } from "@/actions/events"
 import type { RsvpStatus } from "@prisma/client"
+import { normalizeFacebookUrl } from "@/lib/facebook"
 
 export async function upsertGuest(eventId: string, input: GuestInput): Promise<ActionResult<{ id: string }>> {
   const user = await requireUser()
@@ -34,6 +35,7 @@ export async function upsertGuest(eventId: string, input: GuestInput): Promise<A
     email: d.email || null,
     phone: d.phone || null,
     category: d.category || null,
+    facebookProfileUrl: normalizeFacebookUrl(d.facebookProfileUrl),
     groupId: d.groupId || null,
     plusOneAllowed: d.plusOneAllowed ?? false,
     maxPlusOnes: d.maxPlusOnes ?? 0,
@@ -80,7 +82,14 @@ export async function bulkSetRsvpStatus(eventId: string, guestIds: string[], sta
   return { ok: true, data: undefined }
 }
 
-export async function importGuests(eventId: string, rows: ImportRow[]): Promise<ActionResult<{ imported: number; skipped: number }>> {
+export type ImportResult = {
+  imported: number
+  skipped: number
+  /** Rows imported without their Facebook link because it wasn't a valid Facebook/Messenger URL (1-based file rows). */
+  invalidFacebook: Array<{ row: number; name: string }>
+}
+
+export async function importGuests(eventId: string, rows: ImportRow[]): Promise<ActionResult<ImportResult>> {
   const user = await requireUser()
   await requireEventAccess(user.id, eventId).catch(() => { throw new Error("NO_ACCESS") })
 
@@ -96,8 +105,9 @@ export async function importGuests(eventId: string, rows: ImportRow[]): Promise<
   let imported = 0
   let skipped = 0
   const toCreate: ImportRow[] = []
+  const invalidFacebook: ImportResult["invalidFacebook"] = []
 
-  for (const raw of rows) {
+  for (const [index, raw] of rows.entries()) {
     const parsed = importRowSchema.safeParse(raw)
     if (!parsed.success) {
       skipped++
@@ -113,7 +123,11 @@ export async function importGuests(eventId: string, rows: ImportRow[]): Promise<
       continue
     }
     if (row.email) existingEmails.add(row.email)
-    toCreate.push(row)
+    const facebook = normalizeFacebookUrl(row.facebookProfileUrl)
+    if (row.facebookProfileUrl && !facebook && invalidFacebook.length < 200) {
+      invalidFacebook.push({ row: index + 2, name: `${row.firstName} ${row.lastName ?? ""}`.trim() })
+    }
+    toCreate.push({ ...row, facebookProfileUrl: facebook ?? undefined })
   }
 
   if (toCreate.length) {
@@ -125,13 +139,14 @@ export async function importGuests(eventId: string, rows: ImportRow[]): Promise<
         email: row.email || null,
         phone: row.phone || null,
         category: row.category || null,
+        facebookProfileUrl: row.facebookProfileUrl || null,
       })),
     })
     imported = toCreate.length
   }
 
   revalidatePath(`/dashboard/events/${eventId}/guests`)
-  return { ok: true, data: { imported, skipped } }
+  return { ok: true, data: { imported, skipped, invalidFacebook } }
 }
 
 export async function upsertCustomQuestion(eventId: string, input: CustomQuestionInput): Promise<ActionResult<{ id: string }>> {

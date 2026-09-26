@@ -6,7 +6,7 @@ import Papa from "papaparse"
 import * as XLSX from "xlsx"
 import { toast } from "sonner"
 import { UploadCloud } from "lucide-react"
-import { importGuests } from "@/actions/guests"
+import { importGuests, type ImportResult } from "@/actions/guests"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -19,6 +19,7 @@ const TARGET_FIELDS = [
   { key: "email", label: "Email", required: false },
   { key: "phone", label: "Phone", required: false },
   { key: "category", label: "Category", required: false },
+  { key: "facebookProfileUrl", label: "Facebook Profile", required: false },
 ] as const
 
 type TargetKey = (typeof TARGET_FIELDS)[number]["key"]
@@ -28,9 +29,9 @@ export default function ImportGuestsPage({ params }: { params: Promise<{ eventId
   const router = useRouter()
   const [headers, setHeaders] = useState<string[]>([])
   const [rows, setRows] = useState<Record<string, string>[]>([])
-  const [mapping, setMapping] = useState<Record<TargetKey, string>>({ firstName: "", lastName: "", email: "", phone: "", category: "" })
+  const [mapping, setMapping] = useState<Record<TargetKey, string>>({ firstName: "", lastName: "", email: "", phone: "", category: "", facebookProfileUrl: "" })
   const [importing, setImporting] = useState(false)
-  const [result, setResult] = useState<{ imported: number; skipped: number } | null>(null)
+  const [result, setResult] = useState<ImportResult | null>(null)
 
   function handleFile(file: File) {
     const name = file.name.toLowerCase()
@@ -70,10 +71,11 @@ export default function ImportGuestsPage({ params }: { params: Promise<{ eventId
   function applyParsed(fields: string[], data: Record<string, string>[]) {
     setHeaders(fields)
     setRows(data)
-    const guess: Record<TargetKey, string> = { firstName: "", lastName: "", email: "", phone: "", category: "" }
+    const guess: Record<TargetKey, string> = { firstName: "", lastName: "", email: "", phone: "", category: "", facebookProfileUrl: "" }
     for (const field of fields) {
       const norm = field.toLowerCase().replace(/[^a-z]/g, "")
-      if (norm.includes("first")) guess.firstName = field
+      if (norm.includes("facebook") || norm === "fb" || norm.includes("messenger")) guess.facebookProfileUrl = field
+      else if (norm.includes("first")) guess.firstName = field
       else if (norm.includes("last")) guess.lastName = field
       else if (norm.includes("email")) guess.email = field
       else if (norm.includes("phone") || norm.includes("mobile")) guess.phone = field
@@ -95,6 +97,7 @@ export default function ImportGuestsPage({ params }: { params: Promise<{ eventId
       email: mapping.email ? r[mapping.email] : undefined,
       phone: mapping.phone ? r[mapping.phone] : undefined,
       category: mapping.category ? r[mapping.category] : undefined,
+      facebookProfileUrl: mapping.facebookProfileUrl ? String(r[mapping.facebookProfileUrl] ?? "") : undefined,
     }))
     const res = await safe(importGuests(eventId, mapped))
     setImporting(false)
@@ -170,7 +173,19 @@ export default function ImportGuestsPage({ params }: { params: Promise<{ eventId
           {result && (
             <Card className="bg-secondary/40">
               <CardContent className="p-4 text-sm">
-                Imported <strong>{result.imported}</strong> guest(s). Skipped <strong>{result.skipped}</strong> (duplicates, invalid rows, or plan limit reached).
+                <p>Imported <strong>{result.imported}</strong> guest(s). Skipped <strong>{result.skipped}</strong> (duplicates, invalid rows, or plan limit reached).</p>
+                {result.invalidFacebook.length > 0 && (
+                  <div className="mt-3 space-y-1">
+                    <p>
+                      <strong>{result.invalidFacebook.length}</strong> guest(s) were imported without their Facebook link because it wasn&apos;t a valid
+                      Facebook profile or Messenger link. You can add it later from the guest list.
+                    </p>
+                    <ul className="list-disc pl-5 text-muted-foreground">
+                      {result.invalidFacebook.slice(0, 20).map((r) => <li key={r.row}>Row {r.row}: {r.name}</li>)}
+                    </ul>
+                    {result.invalidFacebook.length > 20 && <p className="text-muted-foreground">…and {result.invalidFacebook.length - 20} more.</p>}
+                  </div>
+                )}
               </CardContent>
             </Card>
           )}
